@@ -7,47 +7,258 @@ namespace Dennokoworks
 {
     public class DennokoExInspector : lilToonInspector
     {
-        // Custom properties
-        //MaterialProperty customVariable;
+        // -- Reflection 2nd --
+        MaterialProperty _CustomRefl2ndEnabled;
+        MaterialProperty _CustomRefl2ndTex;
+        MaterialProperty _CustomRefl2ndMaskTex;
+        MaterialProperty _CustomRefl2ndColor;
+        MaterialProperty _CustomRefl2ndStrength;
+        MaterialProperty _CustomRefl2ndAnisotropy;
+        MaterialProperty _CustomRefl2ndAnisotropyAngle;
 
-        private static bool isShowCustomProperties;
+        // -- Rim 2nd --
+        MaterialProperty _CustomRim2ndEnabled;
+        MaterialProperty _CustomRim2ndColor;
+        MaterialProperty _CustomRim2ndMaskTex;
+        MaterialProperty _CustomRim2ndPower;
+        MaterialProperty _CustomRim2ndStrength;
+        MaterialProperty _CustomRim2ndBlendMode;
+
+        // -- Matcap 3rd --
+        MaterialProperty _CustomMatcap3rdEnabled;
+        MaterialProperty _CustomMatcap3rdTex;
+        MaterialProperty _CustomMatcap3rdMaskTex;
+        MaterialProperty _CustomMatcap3rdColor;
+        MaterialProperty _CustomMatcap3rdStrength;
+        MaterialProperty _CustomMatcap3rdBlendMode;
+
+        // -- Extra Decal --
+        MaterialProperty _CustomDecalEnabled;
+        MaterialProperty _CustomDecalSharedMaskTex;
+        MaterialProperty _CustomDecalTex;
+        MaterialProperty _CustomDecalNormalTex;
+        MaterialProperty _CustomDecalNormalStrength;
+        MaterialProperty _CustomDecalMatcapTex;
+        MaterialProperty _CustomDecalMatcapStrength;
+        MaterialProperty _CustomDecalColor;
+        MaterialProperty _CustomDecalTiling;
+        MaterialProperty _CustomDecalBlendMode;
+
+        // Foldout states
+        static bool _foldRefl2nd   = false;
+        static bool _foldRim2nd    = false;
+        static bool _foldMatcap3rd = false;
+        static bool _foldDecal     = false;
+
         private const string shaderName = "dennokoworks/DennokoEx";
 
         protected override void LoadCustomProperties(MaterialProperty[] props, Material material)
         {
             isCustomShader = true;
-
-            // If you want to change rendering modes in the editor, specify the shader here
             ReplaceToCustomShaders();
             isShowRenderMode = !material.shader.name.Contains("Optional");
 
-            // If not, set isShowRenderMode to false
-            //isShowRenderMode = false;
+            _CustomRefl2ndEnabled         = FindProperty("_CustomRefl2ndEnabled",         props, false);
+            _CustomRefl2ndTex             = FindProperty("_CustomRefl2ndTex",             props, false);
+            _CustomRefl2ndMaskTex         = FindProperty("_CustomRefl2ndMaskTex",         props, false);
+            _CustomRefl2ndColor           = FindProperty("_CustomRefl2ndColor",           props, false);
+            _CustomRefl2ndStrength        = FindProperty("_CustomRefl2ndStrength",        props, false);
+            _CustomRefl2ndAnisotropy      = FindProperty("_CustomRefl2ndAnisotropy",      props, false);
+            _CustomRefl2ndAnisotropyAngle = FindProperty("_CustomRefl2ndAnisotropyAngle", props, false);
 
-            //LoadCustomLanguage("");
-            //customVariable = FindProperty("_CustomVariable", props);
+            _CustomRim2ndEnabled          = FindProperty("_CustomRim2ndEnabled",          props, false);
+            _CustomRim2ndColor            = FindProperty("_CustomRim2ndColor",            props, false);
+            _CustomRim2ndMaskTex          = FindProperty("_CustomRim2ndMaskTex",          props, false);
+            _CustomRim2ndPower            = FindProperty("_CustomRim2ndPower",            props, false);
+            _CustomRim2ndStrength         = FindProperty("_CustomRim2ndStrength",         props, false);
+            _CustomRim2ndBlendMode        = FindProperty("_CustomRim2ndBlendMode",        props, false);
+
+            _CustomMatcap3rdEnabled       = FindProperty("_CustomMatcap3rdEnabled",       props, false);
+            _CustomMatcap3rdTex           = FindProperty("_CustomMatcap3rdTex",           props, false);
+            _CustomMatcap3rdMaskTex       = FindProperty("_CustomMatcap3rdMaskTex",       props, false);
+            _CustomMatcap3rdColor         = FindProperty("_CustomMatcap3rdColor",         props, false);
+            _CustomMatcap3rdStrength      = FindProperty("_CustomMatcap3rdStrength",      props, false);
+            _CustomMatcap3rdBlendMode     = FindProperty("_CustomMatcap3rdBlendMode",     props, false);
+
+            _CustomDecalEnabled           = FindProperty("_CustomDecalEnabled",           props, false);
+            _CustomDecalSharedMaskTex     = FindProperty("_CustomDecalSharedMaskTex",     props, false);
+            _CustomDecalTex               = FindProperty("_CustomDecalTex",               props, false);
+            _CustomDecalNormalTex         = FindProperty("_CustomDecalNormalTex",         props, false);
+            _CustomDecalNormalStrength    = FindProperty("_CustomDecalNormalStrength",    props, false);
+            _CustomDecalMatcapTex         = FindProperty("_CustomDecalMatcapTex",         props, false);
+            _CustomDecalMatcapStrength    = FindProperty("_CustomDecalMatcapStrength",    props, false);
+            _CustomDecalColor             = FindProperty("_CustomDecalColor",             props, false);
+            _CustomDecalTiling            = FindProperty("_CustomDecalTiling",            props, false);
+            _CustomDecalBlendMode         = FindProperty("_CustomDecalBlendMode",         props, false);
         }
 
         protected override void DrawCustomProperties(Material material)
         {
-            // GUIStyles Name   Description
-            // ---------------- ------------------------------------
-            // boxOuter         outer box
-            // boxInnerHalf     inner box
-            // boxInner         inner box without label
-            // customBox        box (similar to unity default box)
-            // customToggleFont label for box
+            EditorGUILayout.Space(8);
+            EditorGUILayout.LabelField("DennokoEx", EditorStyles.centeredGreyMiniLabel);
+            EditorGUILayout.Space(4);
 
-            isShowCustomProperties = Foldout("Custom Properties", "Custom Properties", isShowCustomProperties);
-            if(isShowCustomProperties)
+            DrawRefl2nd();
+            DrawRim2nd();
+            DrawMatcap3rd();
+            DrawDecal();
+        }
+
+        // ========================================================================
+        //  Helper: Toggle in boxOuter style (matches lilToon's ToggleLeft pattern)
+        // ========================================================================
+        void DrawToggle(MaterialProperty enabledProp)
+        {
+            if (enabledProp == null) return;
+            EditorGUI.BeginChangeCheck();
+            bool on = EditorGUI.ToggleLeft(
+                EditorGUILayout.GetControlRect(),
+                enabledProp.displayName,
+                enabledProp.floatValue > 0.5f,
+                lilEditorGUI.customToggleFont
+            );
+            if (EditorGUI.EndChangeCheck())
+                enabledProp.floatValue = on ? 1f : 0f;
+        }
+
+        void Prop(MaterialProperty prop, string label)
+        {
+            if (prop != null) m_MaterialEditor.ShaderProperty(prop, label);
+        }
+
+        // -- Reflection 2nd --
+        void DrawRefl2nd()
+        {
+            _foldRefl2nd = Foldout("Reflection 2nd (Anisotropy)", _foldRefl2nd);
+            if (_foldRefl2nd)
             {
-                EditorGUILayout.BeginVertical(boxOuter);
-                EditorGUILayout.LabelField(GetLoc("Custom Properties"), customToggleFont);
-                EditorGUILayout.BeginVertical(boxInnerHalf);
-
-                //m_MaterialEditor.ShaderProperty(customVariable, "Custom Variable");
-
+                EditorGUILayout.BeginVertical(lilEditorGUI.boxOuter);
+                DrawToggle(_CustomRefl2ndEnabled);
+                if (_CustomRefl2ndEnabled != null && _CustomRefl2ndEnabled.floatValue > 0.5f)
+                {
+                    EditorGUILayout.BeginVertical(lilEditorGUI.boxInnerHalf);
+                    Prop(_CustomRefl2ndTex,             "Texture");
+                    Prop(_CustomRefl2ndMaskTex,         "Mask");
+                    Prop(_CustomRefl2ndColor,           "Color");
+                    lilEditorGUI.DrawLine();
+                    Prop(_CustomRefl2ndStrength,        "Strength");
+                    Prop(_CustomRefl2ndAnisotropy,      "Anisotropy");
+                    Prop(_CustomRefl2ndAnisotropyAngle, "Anisotropy Angle (rad)");
+                    EditorGUILayout.EndVertical();
+                }
                 EditorGUILayout.EndVertical();
+            }
+        }
+
+        // -- Rim 2nd --
+        void DrawRim2nd()
+        {
+            _foldRim2nd = Foldout("Rim 2nd", _foldRim2nd);
+            if (_foldRim2nd)
+            {
+                EditorGUILayout.BeginVertical(lilEditorGUI.boxOuter);
+                DrawToggle(_CustomRim2ndEnabled);
+                if (_CustomRim2ndEnabled != null && _CustomRim2ndEnabled.floatValue > 0.5f)
+                {
+                    EditorGUILayout.BeginVertical(lilEditorGUI.boxInnerHalf);
+                    Prop(_CustomRim2ndColor,     "Color");
+                    Prop(_CustomRim2ndMaskTex,   "Mask");
+                    lilEditorGUI.DrawLine();
+                    Prop(_CustomRim2ndPower,     "Power");
+                    Prop(_CustomRim2ndStrength,  "Strength");
+                    if (_CustomRim2ndBlendMode != null)
+                    {
+                        EditorGUI.BeginChangeCheck();
+                        int mode = EditorGUILayout.Popup("Blend Mode",
+                            (int)_CustomRim2ndBlendMode.floatValue,
+                            new[] { "Rim Light (Add)", "Rim Shade (Multiply)" });
+                        if (EditorGUI.EndChangeCheck())
+                            _CustomRim2ndBlendMode.floatValue = mode;
+                    }
+                    EditorGUILayout.EndVertical();
+                }
+                EditorGUILayout.EndVertical();
+            }
+        }
+
+        // -- Matcap 3rd --
+        void DrawMatcap3rd()
+        {
+            _foldMatcap3rd = Foldout("Matcap 3rd", _foldMatcap3rd);
+            if (_foldMatcap3rd)
+            {
+                EditorGUILayout.BeginVertical(lilEditorGUI.boxOuter);
+                DrawToggle(_CustomMatcap3rdEnabled);
+                if (_CustomMatcap3rdEnabled != null && _CustomMatcap3rdEnabled.floatValue > 0.5f)
+                {
+                    EditorGUILayout.BeginVertical(lilEditorGUI.boxInnerHalf);
+                    Prop(_CustomMatcap3rdTex,      "Texture");
+                    Prop(_CustomMatcap3rdMaskTex,  "Mask");
+                    Prop(_CustomMatcap3rdColor,    "Color");
+                    lilEditorGUI.DrawLine();
+                    Prop(_CustomMatcap3rdStrength, "Strength");
+                    if (_CustomMatcap3rdBlendMode != null)
+                    {
+                        EditorGUI.BeginChangeCheck();
+                        int mode = EditorGUILayout.Popup("Blend Mode",
+                            (int)_CustomMatcap3rdBlendMode.floatValue,
+                            new[] { "Add", "Multiply", "Screen" });
+                        if (EditorGUI.EndChangeCheck())
+                            _CustomMatcap3rdBlendMode.floatValue = mode;
+                    }
+                    EditorGUILayout.EndVertical();
+                }
+                EditorGUILayout.EndVertical();
+            }
+        }
+
+        // -- Extra Decal --
+        void DrawDecal()
+        {
+            _foldDecal = Foldout("Extra Decal", _foldDecal);
+            if (_foldDecal)
+            {
+                EditorGUILayout.BeginVertical(lilEditorGUI.boxOuter);
+                DrawToggle(_CustomDecalEnabled);
+                if (_CustomDecalEnabled != null && _CustomDecalEnabled.floatValue > 0.5f)
+                {
+                    EditorGUILayout.BeginVertical(lilEditorGUI.boxInnerHalf);
+
+                    // Shared Mask
+                    EditorGUILayout.LabelField("Shared Mask", lilEditorGUI.boldLabel);
+                    Prop(_CustomDecalSharedMaskTex, "Shared Mask (R)");
+                    lilEditorGUI.DrawLine();
+
+                    // Decal Color
+                    EditorGUILayout.LabelField("Decal Color", lilEditorGUI.boldLabel);
+                    Prop(_CustomDecalTex,       "Texture");
+                    Prop(_CustomDecalColor,     "Color");
+                    if (_CustomDecalTiling != null)
+                        m_MaterialEditor.ShaderProperty(_CustomDecalTiling, "UV (XY=Tiling ZW=Offset)");
+                    if (_CustomDecalBlendMode != null)
+                    {
+                        EditorGUI.BeginChangeCheck();
+                        int mode = EditorGUILayout.Popup("Blend Mode",
+                            (int)_CustomDecalBlendMode.floatValue,
+                            new[] { "Normal (Alpha)", "Add", "Multiply" });
+                        if (EditorGUI.EndChangeCheck())
+                            _CustomDecalBlendMode.floatValue = mode;
+                    }
+                    lilEditorGUI.DrawLine();
+
+                    // Additional Normal
+                    EditorGUILayout.LabelField("Additional Normal", lilEditorGUI.boldLabel);
+                    Prop(_CustomDecalNormalTex,      "Normal Map");
+                    Prop(_CustomDecalNormalStrength, "Normal Strength");
+                    lilEditorGUI.DrawLine();
+
+                    // Decal Matcap
+                    EditorGUILayout.LabelField("Decal Matcap", lilEditorGUI.boldLabel);
+                    Prop(_CustomDecalMatcapTex,      "Matcap Texture");
+                    Prop(_CustomDecalMatcapStrength, "Matcap Strength");
+
+                    EditorGUILayout.EndVertical();
+                }
                 EditorGUILayout.EndVertical();
             }
         }
@@ -116,23 +327,6 @@ namespace Dennokoworks
             ltsmfur     = Shader.Find("Hidden/" + shaderName + "/MultiFur");
             ltsmgem     = Shader.Find("Hidden/" + shaderName + "/MultiGem");
         }
-
-        // You can create a menu like this
-        /*
-        [MenuItem("Assets/DennokoEx/Convert material to custom shader", false, 1100)]
-        private static void ConvertMaterialToCustomShaderMenu()
-        {
-            if(Selection.objects.Length == 0) return;
-            DennokoExInspector inspector = new DennokoExInspector();
-            for(int i = 0; i < Selection.objects.Length; i++)
-            {
-                if(Selection.objects[i] is Material)
-                {
-                    inspector.ConvertMaterialToCustomShader((Material)Selection.objects[i]);
-                }
-            }
-        }
-        */
     }
 }
 #endif
