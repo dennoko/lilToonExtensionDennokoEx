@@ -62,10 +62,10 @@
         float  _r2Shininess = exp2(_CustomRefl2ndSmoothness * 10.0 + 1.0); \
         float3 _r2H        = normalize(fd.L + fd.V); \
         if (_CustomRefl2ndAnisotropic > 0.5) { \
-            float3 _r2T1    = normalize(fd.TBN[0] + fd.TBN[2] * _CustomRefl2ndAnisoPrimaryShift); \
+            float3 _r2T1    = normalize(fd.TBN[1] + fd.N * _CustomRefl2ndAnisoPrimaryShift); \
             float  _r2TH1   = dot(_r2T1, _r2H); \
             float  _r2Spec1 = smoothstep(-1.0, 0.0, _r2TH1) * pow(sqrt(max(0.0, 1.0 - _r2TH1 * _r2TH1)), _r2Shininess); \
-            float3 _r2T2    = normalize(fd.TBN[0] + fd.TBN[2] * _CustomRefl2ndAnisoSecondaryShift); \
+            float3 _r2T2    = normalize(fd.TBN[1] + fd.N * _CustomRefl2ndAnisoSecondaryShift); \
             float  _r2TH2   = dot(_r2T2, _r2H); \
             float  _r2Spec2 = smoothstep(-1.0, 0.0, _r2TH2) * pow(sqrt(max(0.0, 1.0 - _r2TH2 * _r2TH2)), _r2Shininess * 0.5); \
             fd.col.rgb += (_CustomRefl2ndColor.rgb * _r2Spec1 + _CustomRefl2ndAnisoSecondaryColor.rgb * _r2Spec2 * _CustomRefl2ndAnisoSecondaryStrength) * _CustomRefl2ndStrength * _r2Mask * fd.lightColor; \
