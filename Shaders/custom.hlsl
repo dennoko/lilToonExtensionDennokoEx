@@ -1,12 +1,12 @@
 // =============================================================================
-// DennokoEx custom.hlsl — lilToon 2.x 拡張シェーダー
-// 機能: 反射2nd(異方性) / リム2nd / Matcap3rd / 追加デカール
+// DennokoEx custom.hlsl - lilToon 2.x Extended Shader
+// Features: 2nd Reflection (Anisotropy) / 2nd Rim / 3rd Matcap / Additional Decal
 // =============================================================================
 #ifndef DENNOKOEX_CUSTOM_INCLUDED
 #define DENNOKOEX_CUSTOM_INCLUDED
 
 // =============================================================================
-// CBUFFER 変数宣言
+// CBUFFER Variable Declarations
 // =============================================================================
 #define LIL_CUSTOM_PROPERTIES \
     float4 _CustomRefl2ndColor; \
@@ -31,7 +31,7 @@
     float  _CustomDecalEnabled;
 
 // =============================================================================
-// テクスチャ宣言
+// Texture Declarations
 // =============================================================================
 #define LIL_CUSTOM_TEXTURES \
     TEXTURE2D(_CustomRefl2ndTex); \
@@ -54,7 +54,7 @@
     SAMPLER(sampler_CustomDecalMatcapTex);
 
 // =============================================================================
-// BEFORE_MAIN — デカール法線を fd.N に反映（ライティングへ影響させる）
+// BEFORE_MAIN — Apply decal normal to fd.N (affecting lighting)
 // =============================================================================
 #define BEFORE_MAIN \
     if (_CustomDecalEnabled > 0.5) { \
@@ -65,7 +65,7 @@
     }
 
 // =============================================================================
-// BEFORE_MAIN2ND — デカールカラーをメインカラー後にブレンド
+// BEFORE_MAIN2ND — Blend decal color after main color
 // =============================================================================
 #define BEFORE_MAIN2ND \
     if (_CustomDecalEnabled > 0.5) { \
@@ -83,8 +83,8 @@
     }
 
 // =============================================================================
-// BEFORE_REFLECTION — 反射2nd（異方性マットキャップ方式）
-// TBN[0]=Tangent / TBN[1]=Bitangent を回転して法線を歪め、異方性反射を再現
+// BEFORE_REFLECTION — 2nd Reflection (Anisotropic Matcap method)
+// Rotate TBN[0]=Tangent / TBN[1]=Bitangent to distort normals and reproduce anisotropic reflection
 // =============================================================================
 #define BEFORE_REFLECTION \
     if (_CustomRefl2ndEnabled > 0.5) { \
@@ -100,7 +100,7 @@
     }
 
 // =============================================================================
-// BEFORE_RIMLIGHT — Matcap3rd（MatcapおよびMatcap2nd処理後に追加する3枚目）
+// BEFORE_RIMLIGHT — 3rd Matcap (Third matcap added after Matcap and 2nd Matcap processing)
 // =============================================================================
 #define BEFORE_RIMLIGHT \
     if (_CustomMatcap3rdEnabled > 0.5) { \
@@ -119,8 +119,8 @@
     }
 
 // =============================================================================
-// BEFORE_EMISSION_1ST — リム2nd（標準リム処理後に適用）
-// BlendMode: 0=RimLight(加算) / 1=RimShade(乗算)
+// BEFORE_EMISSION_1ST — 2nd Rim (Applied after standard rim light processing)
+// BlendMode: 0=RimLight(Add) / 1=RimShade(Multiply)
 // =============================================================================
 #define BEFORE_EMISSION_1ST \
     if (_CustomRim2ndEnabled > 0.5) { \
@@ -136,7 +136,7 @@
     }
 
 // =============================================================================
-// BEFORE_OUTPUT — デカールMatcap（デカール領域にのみMatcapを重ねる）
+// BEFORE_OUTPUT — Decal Matcap (Overlay matcap only on decal area)
 // =============================================================================
 #define BEFORE_OUTPUT \
     if (_CustomDecalEnabled > 0.5) { \

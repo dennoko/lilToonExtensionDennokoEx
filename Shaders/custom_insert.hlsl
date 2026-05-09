@@ -1,7 +1,7 @@
 // =============================================================================
-// DennokoEx custom_insert.hlsl — lilToon 2.x インクルード・構造体拡張
+// DennokoEx custom_insert.hlsl - lilToon 2.x Include / Structure Extension
 // =============================================================================
 
-// TBN行列をフラグメントシェーダーに確実に渡す（デカール法線・反射2nd異方性で使用）
+// Ensure TBN matrix is passed to the fragment shader (used for decal normals and 2nd reflection anisotropy)
 #define LIL_V2F_FORCE_TANGENT
 #define LIL_V2F_FORCE_BITANGENT

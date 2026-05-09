@@ -1,38 +1,38 @@
 [CustomShaderProperties]
-|
-|// --- Reflection 2nd ---
-|_CustomRefl2ndEnabled ("Enable Reflection 2nd", Float) = 0
-|_CustomRefl2ndTex ("Reflection 2nd Texture", 2D) = "white" {}
-|_CustomRefl2ndMaskTex ("Reflection 2nd Mask", 2D) = "white" {}
-|_CustomRefl2ndColor ("Reflection 2nd Color", [HDR] Color) = (1, 1, 1, 1)
-|_CustomRefl2ndStrength ("Reflection 2nd Strength", Range(0, 1)) = 0.5
-|_CustomRefl2ndAnisotropy ("Anisotropy Amount", Range(0, 1)) = 0.5
-|_CustomRefl2ndAnisotropyAngle ("Anisotropy Angle (rad)", Range(0, 6.283)) = 0
-|
-|// --- Rim 2nd ---
-|_CustomRim2ndEnabled ("Enable Rim 2nd", Float) = 0
-|_CustomRim2ndColor ("Rim 2nd Color", [HDR] Color) = (1, 1, 1, 1)
-|_CustomRim2ndMaskTex ("Rim 2nd Mask", 2D) = "white" {}
-|_CustomRim2ndPower ("Rim 2nd Power", Range(0.1, 8)) = 3
-|_CustomRim2ndStrength ("Rim 2nd Strength", Range(0, 1)) = 0.5
-|_CustomRim2ndBlendMode ("Rim 2nd Blend Mode (0=Light 1=Shade)", Float) = 0
-|
-|// --- Matcap 3rd ---
-|_CustomMatcap3rdEnabled ("Enable Matcap 3rd", Float) = 0
-|_CustomMatcap3rdTex ("Matcap 3rd Texture", 2D) = "black" {}
-|_CustomMatcap3rdMaskTex ("Matcap 3rd Mask", 2D) = "white" {}
-|_CustomMatcap3rdColor ("Matcap 3rd Color", [HDR] Color) = (1, 1, 1, 1)
-|_CustomMatcap3rdStrength ("Matcap 3rd Strength", Range(0, 1)) = 1
-|_CustomMatcap3rdBlendMode ("Matcap 3rd Blend Mode (0=Add 1=Mul 2=Screen)", Float) = 0
-|
-|// --- Extra Decal ---
-|_CustomDecalEnabled ("Enable Extra Decal", Float) = 0
-|_CustomDecalSharedMaskTex ("Decal Shared Mask (R=Mask)", 2D) = "white" {}
-|_CustomDecalTex ("Decal Texture", 2D) = "white" {}
-|_CustomDecalNormalTex ("Decal Normal Map", 2D) = "bump" {}
-|_CustomDecalNormalStrength ("Decal Normal Strength", Range(0, 1)) = 1
-|_CustomDecalMatcapTex ("Decal Matcap Texture", 2D) = "black" {}
-|_CustomDecalMatcapStrength ("Decal Matcap Strength", Range(0, 1)) = 1
-|_CustomDecalColor ("Decal Color", Color) = (1, 1, 1, 1)
-|_CustomDecalTiling ("Decal UV (XY=Tiling ZW=Offset)", Vector) = (1, 1, 0, 0)
-|_CustomDecalBlendMode ("Decal Blend Mode (0=Normal 1=Add 2=Mul)", Float) = 0
+
+// --- Reflection 2nd ---
+_CustomRefl2ndEnabled ("Enable Reflection 2nd", Float) = 0
+_CustomRefl2ndTex ("Reflection 2nd Texture", 2D) = "white" {}
+_CustomRefl2ndMaskTex ("Reflection 2nd Mask", 2D) = "white" {}
+_CustomRefl2ndColor ("Reflection 2nd Color", [HDR] Color) = (1, 1, 1, 1)
+_CustomRefl2ndStrength ("Reflection 2nd Strength", Range(0, 1)) = 0.5
+_CustomRefl2ndAnisotropy ("Anisotropy Amount", Range(0, 1)) = 0.5
+_CustomRefl2ndAnisotropyAngle ("Anisotropy Angle (rad)", Range(0, 6.283)) = 0
+
+// --- Rim 2nd ---
+_CustomRim2ndEnabled ("Enable Rim 2nd", Float) = 0
+_CustomRim2ndColor ("Rim 2nd Color", [HDR] Color) = (1, 1, 1, 1)
+_CustomRim2ndMaskTex ("Rim 2nd Mask", 2D) = "white" {}
+_CustomRim2ndPower ("Rim 2nd Power", Range(0.1, 8)) = 3
+_CustomRim2ndStrength ("Rim 2nd Strength", Range(0, 1)) = 0.5
+_CustomRim2ndBlendMode ("Rim 2nd Blend Mode (0=Light 1=Shade)", Float) = 0
+
+// --- Matcap 3rd ---
+_CustomMatcap3rdEnabled ("Enable Matcap 3rd", Float) = 0
+_CustomMatcap3rdTex ("Matcap 3rd Texture", 2D) = "black" {}
+_CustomMatcap3rdMaskTex ("Matcap 3rd Mask", 2D) = "white" {}
+_CustomMatcap3rdColor ("Matcap 3rd Color", [HDR] Color) = (1, 1, 1, 1)
+_CustomMatcap3rdStrength ("Matcap 3rd Strength", Range(0, 1)) = 1
+_CustomMatcap3rdBlendMode ("Matcap 3rd Blend Mode (0=Add 1=Mul 2=Screen)", Float) = 0
+
+// --- Extra Decal ---
+_CustomDecalEnabled ("Enable Extra Decal", Float) = 0
+_CustomDecalSharedMaskTex ("Decal Shared Mask (R=Mask)", 2D) = "white" {}
+_CustomDecalTex ("Decal Texture", 2D) = "white" {}
+_CustomDecalNormalTex ("Decal Normal Map", 2D) = "bump" {}
+_CustomDecalNormalStrength ("Decal Normal Strength", Range(0, 1)) = 1
+_CustomDecalMatcapTex ("Decal Matcap Texture", 2D) = "black" {}
+_CustomDecalMatcapStrength ("Decal Matcap Strength", Range(0, 1)) = 1
+_CustomDecalColor ("Decal Color", Color) = (1, 1, 1, 1)
+_CustomDecalTiling ("Decal UV (XY=Tiling ZW=Offset)", Vector) = (1, 1, 0, 0)
+_CustomDecalBlendMode ("Decal Blend Mode (0=Normal 1=Add 2=Mul)", Float) = 0
