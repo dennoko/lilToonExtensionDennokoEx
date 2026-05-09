@@ -18,6 +18,7 @@ namespace Dennokoworks
         MaterialProperty _CustomRefl2ndAnisoSecondaryColor;
         MaterialProperty _CustomRefl2ndAnisoSecondaryStrength;
         MaterialProperty _CustomRefl2ndAnisoSecondaryShift;
+        MaterialProperty _CustomRefl2ndShadowAttenuation;
 
         // -- Rim 2nd --
         MaterialProperty _CustomRim2ndEnabled;
@@ -67,6 +68,7 @@ namespace Dennokoworks
             _CustomRefl2ndAnisoSecondaryColor  = FindProperty("_CustomRefl2ndAnisoSecondaryColor",  props, false);
             _CustomRefl2ndAnisoSecondaryStrength = FindProperty("_CustomRefl2ndAnisoSecondaryStrength", props, false);
             _CustomRefl2ndAnisoSecondaryShift  = FindProperty("_CustomRefl2ndAnisoSecondaryShift",  props, false);
+            _CustomRefl2ndShadowAttenuation    = FindProperty("_CustomRefl2ndShadowAttenuation",    props, false);
 
             _CustomRim2ndEnabled          = FindProperty("_CustomRim2ndEnabled",          props, false);
             _CustomRim2ndColor            = FindProperty("_CustomRim2ndColor",            props, false);
@@ -138,8 +140,9 @@ namespace Dennokoworks
                     Prop(_CustomRefl2ndMaskTex,    "Mask");
                     Prop(_CustomRefl2ndColor,      "Color");
                     lilEditorGUI.DrawLine();
-                    Prop(_CustomRefl2ndStrength,   "Strength");
-                    Prop(_CustomRefl2ndSmoothness, "Smoothness");
+                    Prop(_CustomRefl2ndStrength,          "Strength");
+                    Prop(_CustomRefl2ndShadowAttenuation, "Shadow Attenuation");
+                    Prop(_CustomRefl2ndSmoothness,        "Smoothness");
                     lilEditorGUI.DrawLine();
 
                     // Anisotropic mode toggle

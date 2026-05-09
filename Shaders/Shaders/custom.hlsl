@@ -13,6 +13,7 @@
     float4 _CustomRefl2ndAnisoSecondaryColor; \
     float  _CustomRefl2ndAnisoSecondaryStrength; \
     float  _CustomRefl2ndAnisoSecondaryShift; \
+    float  _CustomRefl2ndShadowAttenuation; \
     float  _CustomRefl2ndEnabled; \
     float4 _CustomRim2ndColor; \
     float  _CustomRim2ndPower; \
@@ -60,6 +61,7 @@
     if (_CustomRefl2ndEnabled > 0.5) { \
         float  _r2Mask     = LIL_SAMPLE_2D(_CustomRefl2ndMaskTex, sampler_linear_repeat, fd.uv0).r; \
         float  _r2Shininess = exp2(_CustomRefl2ndSmoothness * 10.0 + 1.0); \
+        float  _r2Shadow   = lerp(1.0, fd.shadowmix, _CustomRefl2ndShadowAttenuation); \
         float3 _r2H        = normalize(fd.L + fd.V); \
         if (_CustomRefl2ndAnisotropic > 0.5) { \
             float3 _r2T1    = normalize(fd.TBN[1] + fd.N * _CustomRefl2ndAnisoPrimaryShift); \
@@ -68,11 +70,11 @@
             float3 _r2T2    = normalize(fd.TBN[1] + fd.N * _CustomRefl2ndAnisoSecondaryShift); \
             float  _r2TH2   = dot(_r2T2, _r2H); \
             float  _r2Spec2 = smoothstep(-1.0, 0.0, _r2TH2) * pow(sqrt(max(0.0, 1.0 - _r2TH2 * _r2TH2)), _r2Shininess * 0.5); \
-            fd.col.rgb += (_CustomRefl2ndColor.rgb * _r2Spec1 + _CustomRefl2ndAnisoSecondaryColor.rgb * _r2Spec2 * _CustomRefl2ndAnisoSecondaryStrength) * _CustomRefl2ndStrength * _r2Mask * fd.lightColor; \
+            fd.col.rgb += (_CustomRefl2ndColor.rgb * _r2Spec1 + _CustomRefl2ndAnisoSecondaryColor.rgb * _r2Spec2 * _CustomRefl2ndAnisoSecondaryStrength) * _CustomRefl2ndStrength * _r2Mask * _r2Shadow * fd.lightColor; \
         } else { \
             float  _r2NdotH = saturate(dot(fd.N, _r2H)); \
             float  _r2Spec  = pow(_r2NdotH, _r2Shininess); \
-            fd.col.rgb += _CustomRefl2ndColor.rgb * _r2Spec * _CustomRefl2ndStrength * _r2Mask * fd.lightColor; \
+            fd.col.rgb += _CustomRefl2ndColor.rgb * _r2Spec * _CustomRefl2ndStrength * _r2Mask * _r2Shadow * fd.lightColor; \
         } \
     }
 
