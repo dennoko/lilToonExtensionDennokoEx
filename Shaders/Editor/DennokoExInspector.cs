@@ -37,7 +37,6 @@ namespace Dennokoworks
         MaterialProperty _CustomNormal3rdTex;
         MaterialProperty _CustomNormal3rdMaskTex;
         MaterialProperty _CustomNormal3rdStrength;
-        MaterialProperty _CustomNormal3rdTiling;
 
         // Foldout states
         static bool _foldRefl2nd    = false;
@@ -79,7 +78,6 @@ namespace Dennokoworks
             _CustomNormal3rdTex           = FindProperty("_CustomNormal3rdTex",           props, false);
             _CustomNormal3rdMaskTex       = FindProperty("_CustomNormal3rdMaskTex",       props, false);
             _CustomNormal3rdStrength      = FindProperty("_CustomNormal3rdStrength",      props, false);
-            _CustomNormal3rdTiling        = FindProperty("_CustomNormal3rdTiling",        props, false);
         }
 
         protected override void DrawCustomProperties(Material material)
@@ -217,8 +215,6 @@ namespace Dennokoworks
                     Prop(_CustomNormal3rdMaskTex, "Mask");
                     lilEditorGUI.DrawLine();
                     Prop(_CustomNormal3rdStrength, "Strength");
-                    if (_CustomNormal3rdTiling != null)
-                        m_MaterialEditor.ShaderProperty(_CustomNormal3rdTiling, "UV (XY=Tiling ZW=Offset)");
                     EditorGUILayout.EndVertical();
                 }
                 EditorGUILayout.EndVertical();

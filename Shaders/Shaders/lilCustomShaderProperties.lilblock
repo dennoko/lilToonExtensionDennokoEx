@@ -32,5 +32,4 @@
         _CustomNormal3rdEnabled ("Enable Normal Map 3rd", Float) = 0
         _CustomNormal3rdTex ("Normal Map 3rd", 2D) = "bump" {}
         _CustomNormal3rdMaskTex ("Normal Map 3rd Mask", 2D) = "white" {}
-        _CustomNormal3rdStrength ("Normal Map 3rd Strength", Range(0, 2)) = 1
-        _CustomNormal3rdTiling ("Normal Map 3rd UV (XY=Tiling ZW=Offset)", Vector) = (1, 1, 0, 0)
+        _CustomNormal3rdStrength ("Normal Map 3rd Strength", Range(0, 1)) = 0.5

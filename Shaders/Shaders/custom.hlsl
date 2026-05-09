@@ -20,7 +20,7 @@
     float  _CustomMatcap3rdBlendMode; \
     float  _CustomMatcap3rdShadowAttenuation; \
     float  _CustomMatcap3rdEnabled; \
-    float4 _CustomNormal3rdTiling; \
+    float4 _CustomNormal3rdTex_ST; \
     float  _CustomNormal3rdStrength; \
     float  _CustomNormal3rdEnabled;
 
@@ -39,10 +39,12 @@
 // BEFORE_AUDIOLINK - 3rd Normal Map (composited after lilToon's normal map pipeline)
 #define BEFORE_AUDIOLINK \
     if (_CustomNormal3rdEnabled > 0.5) { \
-        float2 _n3UV   = fd.uv0 * _CustomNormal3rdTiling.xy + _CustomNormal3rdTiling.zw; \
+        float2 _n3UV   = fd.uv0 * _CustomNormal3rdTex_ST.xy + _CustomNormal3rdTex_ST.zw; \
         float  _n3Mask = LIL_SAMPLE_2D(_CustomNormal3rdMaskTex, sampler_linear_repeat, fd.uv0).r; \
         float3 _n3NTS  = LIL_SAMPLE_2D(_CustomNormal3rdTex, sampler_linear_repeat, _n3UV).rgb * 2.0 - 1.0; \
-        fd.N = normalize(fd.N + (fd.TBN[0] * _n3NTS.x + fd.TBN[1] * _n3NTS.y) * _CustomNormal3rdStrength * _n3Mask); \
+        float3 _n3WS   = normalize(fd.TBN[0] * _n3NTS.x + fd.TBN[1] * _n3NTS.y + fd.TBN[2] * _n3NTS.z); \
+        float  _n3Infl = saturate(_CustomNormal3rdStrength * _n3Mask); \
+        fd.N = normalize(lerp(fd.N, _n3WS, _n3Infl)); \
     }
 
 // BEFORE_REFLECTION - 2nd Reflection (Blinn-Phong Specular)
