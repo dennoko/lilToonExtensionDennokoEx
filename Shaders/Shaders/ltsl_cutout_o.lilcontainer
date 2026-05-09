@@ -1,0 +1,17 @@
+Shader "Hidden/dennokoworks/DennokoEx/Lite/CutoutOutline"
+{
+    Properties
+    {
+        lilProperties "DefaultLite"
+        lilProperties "DefaultCutout"
+        lilProperties "lilCustomShaderProperties.lilblock"
+    }
+
+    lilPassShaderName "Hidden/dennokoworks/DennokoEx/ltspass_lite_cutout"
+    lilSubShaderTags {"RenderType" = "TransparentCutout" "Queue" = "AlphaTest"}
+    lilSubShaderBRP "DefaultUsePassOutline"
+    lilSubShaderURP "DefaultUsePassOutline"
+    lilSubShaderHDRP "DefaultUsePassOutline"
+
+    CustomEditor "Dennokoworks.DennokoExInspector"
+}

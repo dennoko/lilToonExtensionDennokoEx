@@ -1,0 +1,17 @@
+Shader "Hidden/dennokoworks/DennokoEx/OpaqueOutline"
+{
+    Properties
+    {
+        lilProperties "Default"
+        lilProperties "DefaultOpaque"
+        lilProperties "lilCustomShaderProperties.lilblock"
+    }
+
+    lilPassShaderName "Hidden/dennokoworks/DennokoEx/ltspass_opaque"
+    lilSubShaderTags {"RenderType" = "Opaque" "Queue" = "Geometry"}
+    lilSubShaderBRP "DefaultUsePassOutline"
+    lilSubShaderURP "DefaultUsePassOutline"
+    lilSubShaderHDRP "DefaultUsePassOutline"
+
+    CustomEditor "Dennokoworks.DennokoExInspector"
+}

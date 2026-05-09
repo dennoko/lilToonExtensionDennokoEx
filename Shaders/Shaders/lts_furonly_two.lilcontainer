@@ -1,0 +1,17 @@
+Shader "dennokoworks/DennokoEx/[Optional] FurOnly/TwoPass"
+{
+    Properties
+    {
+        lilProperties "Default"
+        lilProperties "DefaultFurTransparent"
+        lilProperties "lilCustomShaderProperties.lilblock"
+    }
+
+    lilPassShaderName "Hidden/dennokoworks/DennokoEx/FurTwoPass"
+    lilSubShaderTags {"RenderType" = "TransparentCutout" "Queue" = "Transparent"}
+    lilSubShaderBRP "DefaultUsePassFurOnlyTwoPass"
+    lilSubShaderURP "DefaultUsePassFurOnly"
+    lilSubShaderHDRP "DefaultUsePassFurOnly"
+
+    CustomEditor "Dennokoworks.DennokoExInspector"
+}

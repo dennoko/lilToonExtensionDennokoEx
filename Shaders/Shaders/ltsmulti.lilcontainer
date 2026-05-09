@@ -1,0 +1,21 @@
+Shader "dennokoworks/DennokoEx/lilToonMulti"
+{
+    Properties
+    {
+        lilProperties "Default"
+        lilProperties "DefaultOpaque"
+        lilProperties "lilCustomShaderProperties.lilblock"
+    }
+
+    HLSLINCLUDE
+        #include "custom.hlsl"
+    ENDHLSL
+
+    lilSubShaderTags {"RenderType" = "Opaque" "Queue" = "Geometry"}
+    lilSubShaderInsert "lilCustomShaderInsert.lilblock"
+    lilSubShaderBRP "DefaultMulti"
+    lilSubShaderURP "DefaultMulti"
+    lilSubShaderHDRP "DefaultMulti"
+
+    CustomEditor "Dennokoworks.DennokoExInspector"
+}

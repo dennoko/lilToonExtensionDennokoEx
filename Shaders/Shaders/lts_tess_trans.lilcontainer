@@ -1,0 +1,17 @@
+Shader "Hidden/dennokoworks/DennokoEx/Tessellation/Transparent"
+{
+    Properties
+    {
+        lilProperties "Default"
+        lilProperties "DefaultTransparent"
+        lilProperties "lilCustomShaderProperties.lilblock"
+    }
+
+    lilPassShaderName "Hidden/dennokoworks/DennokoEx/ltspass_tess_transparent"
+    lilSubShaderTags {"RenderType" = "TransparentCutout" "Queue" = "AlphaTest+10"}
+    lilSubShaderBRP "DefaultUsePass"
+    lilSubShaderURP "DefaultUsePass"
+    lilSubShaderHDRP "DefaultUsePass"
+
+    CustomEditor "Dennokoworks.DennokoExInspector"
+}

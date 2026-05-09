@@ -1,0 +1,21 @@
+Shader "Hidden/dennokoworks/DennokoEx/MultiOutline"
+{
+    Properties
+    {
+        lilProperties "Default"
+        lilProperties "DefaultOpaque"
+        lilProperties "lilCustomShaderProperties.lilblock"
+    }
+
+    HLSLINCLUDE
+        #include "custom.hlsl"
+    ENDHLSL
+
+    lilSubShaderTags {"RenderType" = "Opaque" "Queue" = "Transparent-100"}
+    lilSubShaderInsert "lilCustomShaderInsert.lilblock"
+    lilSubShaderBRP "DefaultMultiOutline"
+    lilSubShaderURP "DefaultMultiOutline"
+    lilSubShaderHDRP "DefaultMultiOutline"
+
+    CustomEditor "Dennokoworks.DennokoExInspector"
+}

@@ -1,0 +1,17 @@
+Shader "Hidden/dennokoworks/DennokoEx/OnePassTransparent"
+{
+    Properties
+    {
+        lilProperties "Default"
+        lilProperties "DefaultTransparent"
+        lilProperties "lilCustomShaderProperties.lilblock"
+    }
+
+    lilPassShaderName "Hidden/dennokoworks/DennokoEx/ltspass_transparent"
+    lilSubShaderTags {"RenderType" = "TransparentCutout" "Queue" = "AlphaTest+10"}
+    lilSubShaderBRP "DefaultUsePassNoForwardAdd"
+    lilSubShaderURP "DefaultUsePass"
+    lilSubShaderHDRP "DefaultUsePass"
+
+    CustomEditor "Dennokoworks.DennokoExInspector"
+}

@@ -1,0 +1,17 @@
+Shader "dennokoworks/DennokoEx/lilToon"
+{
+    Properties
+    {
+        lilProperties "Default"
+        lilProperties "DefaultOpaque"
+        lilProperties "lilCustomShaderProperties.lilblock"
+    }
+
+    lilPassShaderName "Hidden/dennokoworks/DennokoEx/ltspass_opaque"
+    lilSubShaderTags {"RenderType" = "Opaque" "Queue" = "Geometry"}
+    lilSubShaderBRP "DefaultUsePass"
+    lilSubShaderURP "DefaultUsePass"
+    lilSubShaderHDRP "DefaultUsePass"
+
+    CustomEditor "Dennokoworks.DennokoExInspector"
+}

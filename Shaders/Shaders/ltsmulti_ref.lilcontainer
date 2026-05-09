@@ -1,0 +1,21 @@
+Shader "Hidden/dennokoworks/DennokoEx/MultiRefraction"
+{
+    Properties
+    {
+        lilProperties "Default"
+        lilProperties "DefaultRefraction"
+        lilProperties "lilCustomShaderProperties.lilblock"
+    }
+
+    HLSLINCLUDE
+        #include "custom.hlsl"
+    ENDHLSL
+
+    lilSubShaderTags {"RenderType" = "Opaque" "Queue" = "Transparent-100"}
+    lilSubShaderInsert "lilCustomShaderInsert.lilblock"
+    lilSubShaderBRP "DefaultMultiRefraction"
+    lilSubShaderURP "DefaultMultiRefraction"
+    lilSubShaderHDRP "DefaultMultiRefraction"
+
+    CustomEditor "Dennokoworks.DennokoExInspector"
+}

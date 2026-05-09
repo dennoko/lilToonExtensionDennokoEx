@@ -1,0 +1,21 @@
+Shader "Hidden/dennokoworks/DennokoEx/MultiGem"
+{
+    Properties
+    {
+        lilProperties "Default"
+        lilProperties "DefaultGem"
+        lilProperties "lilCustomShaderProperties.lilblock"
+    }
+
+    HLSLINCLUDE
+        #include "custom.hlsl"
+    ENDHLSL
+
+    lilSubShaderTags {"RenderType" = "Opaque" "Queue" = "Transparent-100"}
+    lilSubShaderInsert "lilCustomShaderInsert.lilblock"
+    lilSubShaderBRP "DefaultMultiGem"
+    lilSubShaderURP "DefaultMultiGem"
+    lilSubShaderHDRP "DefaultMultiGem"
+
+    CustomEditor "Dennokoworks.DennokoExInspector"
+}
