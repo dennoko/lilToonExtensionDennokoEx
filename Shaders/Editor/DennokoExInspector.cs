@@ -31,6 +31,7 @@ namespace Dennokoworks
 
         // -- Matcap 3rd --
         MaterialProperty _CustomMatcap3rdEnabled;
+        MaterialProperty _CustomMatcap3rdUIEnabled;
         MaterialProperty _CustomMatcap3rdTex;
         MaterialProperty _CustomMatcap3rdMaskTex;
         MaterialProperty _CustomMatcap3rdColor;
@@ -40,6 +41,7 @@ namespace Dennokoworks
 
         // -- Normal Map 3rd --
         MaterialProperty _CustomNormal3rdEnabled;
+        MaterialProperty _CustomNormal3rdUIEnabled;
         MaterialProperty _CustomNormal3rdTex;
         MaterialProperty _CustomNormal3rdMaskTex;
         MaterialProperty _CustomNormal3rdStrength;
@@ -79,6 +81,7 @@ namespace Dennokoworks
             _CustomRim2ndShadowAttenuation = FindProperty("_CustomRim2ndShadowAttenuation", props, false);
 
             _CustomMatcap3rdEnabled       = FindProperty("_CustomMatcap3rdEnabled",       props, false);
+            _CustomMatcap3rdUIEnabled     = FindProperty("_CustomMatcap3rdUIEnabled",     props, false);
             _CustomMatcap3rdTex           = FindProperty("_CustomMatcap3rdTex",           props, false);
             _CustomMatcap3rdMaskTex       = FindProperty("_CustomMatcap3rdMaskTex",       props, false);
             _CustomMatcap3rdColor         = FindProperty("_CustomMatcap3rdColor",         props, false);
@@ -87,9 +90,16 @@ namespace Dennokoworks
             _CustomMatcap3rdShadowAttenuation = FindProperty("_CustomMatcap3rdShadowAttenuation", props, false);
 
             _CustomNormal3rdEnabled       = FindProperty("_CustomNormal3rdEnabled",       props, false);
+            _CustomNormal3rdUIEnabled     = FindProperty("_CustomNormal3rdUIEnabled",     props, false);
             _CustomNormal3rdTex           = FindProperty("_CustomNormal3rdTex",           props, false);
             _CustomNormal3rdMaskTex       = FindProperty("_CustomNormal3rdMaskTex",       props, false);
             _CustomNormal3rdStrength      = FindProperty("_CustomNormal3rdStrength",      props, false);
+
+            // Migrate pre-UIEnabled materials: Enabled=1 but UIEnabled not yet set
+            if (_CustomMatcap3rdEnabled?.floatValue > 0.5f && _CustomMatcap3rdUIEnabled?.floatValue < 0.5f)
+                _CustomMatcap3rdUIEnabled.floatValue = 1f;
+            if (_CustomNormal3rdEnabled?.floatValue > 0.5f && _CustomNormal3rdUIEnabled?.floatValue < 0.5f)
+                _CustomNormal3rdUIEnabled.floatValue = 1f;
         }
 
         protected override void DrawCustomProperties(Material material)
@@ -107,6 +117,14 @@ namespace Dennokoworks
         // ========================================================================
         //  Helper: Toggle in boxOuter style (matches lilToon's ToggleLeft pattern)
         // ========================================================================
+        void SyncEffectiveEnabled(MaterialProperty enabledProp, MaterialProperty uiEnabledProp, MaterialProperty texProp)
+        {
+            if (enabledProp == null || uiEnabledProp == null || texProp == null) return;
+            float target = (uiEnabledProp.floatValue > 0.5f && texProp.textureValue != null) ? 1f : 0f;
+            if (enabledProp.floatValue != target)
+                enabledProp.floatValue = target;
+        }
+
         void DrawToggle(MaterialProperty enabledProp)
         {
             if (enabledProp == null) return;
@@ -207,19 +225,26 @@ namespace Dennokoworks
         // -- Matcap 3rd --
         void DrawMatcap3rd()
         {
+            SyncEffectiveEnabled(_CustomMatcap3rdEnabled, _CustomMatcap3rdUIEnabled, _CustomMatcap3rdTex);
             _foldMatcap3rd = Foldout("Matcap 3rd", _foldMatcap3rd);
             if (_foldMatcap3rd)
             {
                 EditorGUILayout.BeginVertical(lilEditorGUI.boxOuter);
-                DrawToggle(_CustomMatcap3rdEnabled);
-                if (_CustomMatcap3rdEnabled != null && _CustomMatcap3rdEnabled.floatValue > 0.5f)
+                EditorGUI.BeginChangeCheck();
+                DrawToggle(_CustomMatcap3rdUIEnabled);
+                if (EditorGUI.EndChangeCheck())
+                    SyncEffectiveEnabled(_CustomMatcap3rdEnabled, _CustomMatcap3rdUIEnabled, _CustomMatcap3rdTex);
+                if (_CustomMatcap3rdUIEnabled != null && _CustomMatcap3rdUIEnabled.floatValue > 0.5f)
                 {
                     EditorGUILayout.BeginVertical(lilEditorGUI.boxInnerHalf);
+                    EditorGUI.BeginChangeCheck();
                     Prop(_CustomMatcap3rdTex,      "Texture");
+                    if (EditorGUI.EndChangeCheck())
+                        SyncEffectiveEnabled(_CustomMatcap3rdEnabled, _CustomMatcap3rdUIEnabled, _CustomMatcap3rdTex);
                     Prop(_CustomMatcap3rdMaskTex,  "Mask");
                     Prop(_CustomMatcap3rdColor,    "Color");
                     lilEditorGUI.DrawLine();
-                    Prop(_CustomMatcap3rdStrength,           "Strength");
+                    Prop(_CustomMatcap3rdStrength,          "Strength");
                     Prop(_CustomMatcap3rdShadowAttenuation, "Shadow Attenuation");
                     if (_CustomMatcap3rdBlendMode != null)
                     {
@@ -239,15 +264,22 @@ namespace Dennokoworks
         // -- Normal Map 3rd --
         void DrawNormal3rd()
         {
+            SyncEffectiveEnabled(_CustomNormal3rdEnabled, _CustomNormal3rdUIEnabled, _CustomNormal3rdTex);
             _foldNormal3rd = Foldout("Normal Map 3rd", _foldNormal3rd);
             if (_foldNormal3rd)
             {
                 EditorGUILayout.BeginVertical(lilEditorGUI.boxOuter);
-                DrawToggle(_CustomNormal3rdEnabled);
-                if (_CustomNormal3rdEnabled != null && _CustomNormal3rdEnabled.floatValue > 0.5f)
+                EditorGUI.BeginChangeCheck();
+                DrawToggle(_CustomNormal3rdUIEnabled);
+                if (EditorGUI.EndChangeCheck())
+                    SyncEffectiveEnabled(_CustomNormal3rdEnabled, _CustomNormal3rdUIEnabled, _CustomNormal3rdTex);
+                if (_CustomNormal3rdUIEnabled != null && _CustomNormal3rdUIEnabled.floatValue > 0.5f)
                 {
                     EditorGUILayout.BeginVertical(lilEditorGUI.boxInnerHalf);
-                    Prop(_CustomNormal3rdTex,     "Normal Map");
+                    EditorGUI.BeginChangeCheck();
+                    Prop(_CustomNormal3rdTex, "Normal Map");
+                    if (EditorGUI.EndChangeCheck())
+                        SyncEffectiveEnabled(_CustomNormal3rdEnabled, _CustomNormal3rdUIEnabled, _CustomNormal3rdTex);
                     Prop(_CustomNormal3rdMaskTex, "Mask");
                     lilEditorGUI.DrawLine();
                     Prop(_CustomNormal3rdStrength, "Strength");

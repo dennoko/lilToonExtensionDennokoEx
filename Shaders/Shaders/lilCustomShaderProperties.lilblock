@@ -25,6 +25,7 @@
 
         //----------------------------------------------------------------------------------------------------------------------
         // Matcap 3rd
+        [HideInInspector] _CustomMatcap3rdUIEnabled ("Enable Matcap 3rd", Float) = 0
         _CustomMatcap3rdEnabled ("Enable Matcap 3rd", Float) = 0
         _CustomMatcap3rdTex ("Matcap 3rd Texture", 2D) = "black" {}
         _CustomMatcap3rdMaskTex ("Matcap 3rd Mask", 2D) = "white" {}
@@ -35,6 +36,7 @@
 
         //----------------------------------------------------------------------------------------------------------------------
         // Normal Map 3rd
+        [HideInInspector] _CustomNormal3rdUIEnabled ("Enable Normal Map 3rd", Float) = 0
         _CustomNormal3rdEnabled ("Enable Normal Map 3rd", Float) = 0
         _CustomNormal3rdTex ("Normal Map 3rd", 2D) = "bump" {}
         _CustomNormal3rdMaskTex ("Normal Map 3rd Mask", 2D) = "white" {}
