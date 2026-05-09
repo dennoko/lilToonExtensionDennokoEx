@@ -9,12 +9,10 @@ namespace Dennokoworks
     {
         // -- Reflection 2nd --
         MaterialProperty _CustomRefl2ndEnabled;
-        MaterialProperty _CustomRefl2ndTex;
         MaterialProperty _CustomRefl2ndMaskTex;
         MaterialProperty _CustomRefl2ndColor;
         MaterialProperty _CustomRefl2ndStrength;
-        MaterialProperty _CustomRefl2ndAnisotropy;
-        MaterialProperty _CustomRefl2ndAnisotropyAngle;
+        MaterialProperty _CustomRefl2ndSmoothness;
 
         // -- Rim 2nd --
         MaterialProperty _CustomRim2ndEnabled;
@@ -23,6 +21,7 @@ namespace Dennokoworks
         MaterialProperty _CustomRim2ndPower;
         MaterialProperty _CustomRim2ndStrength;
         MaterialProperty _CustomRim2ndBlendMode;
+        MaterialProperty _CustomRim2ndShadowAttenuation;
 
         // -- Matcap 3rd --
         MaterialProperty _CustomMatcap3rdEnabled;
@@ -31,24 +30,20 @@ namespace Dennokoworks
         MaterialProperty _CustomMatcap3rdColor;
         MaterialProperty _CustomMatcap3rdStrength;
         MaterialProperty _CustomMatcap3rdBlendMode;
+        MaterialProperty _CustomMatcap3rdShadowAttenuation;
 
-        // -- Extra Decal --
-        MaterialProperty _CustomDecalEnabled;
-        MaterialProperty _CustomDecalSharedMaskTex;
-        MaterialProperty _CustomDecalTex;
-        MaterialProperty _CustomDecalNormalTex;
-        MaterialProperty _CustomDecalNormalStrength;
-        MaterialProperty _CustomDecalMatcapTex;
-        MaterialProperty _CustomDecalMatcapStrength;
-        MaterialProperty _CustomDecalColor;
-        MaterialProperty _CustomDecalTiling;
-        MaterialProperty _CustomDecalBlendMode;
+        // -- Normal Map 3rd --
+        MaterialProperty _CustomNormal3rdEnabled;
+        MaterialProperty _CustomNormal3rdTex;
+        MaterialProperty _CustomNormal3rdMaskTex;
+        MaterialProperty _CustomNormal3rdStrength;
+        MaterialProperty _CustomNormal3rdTiling;
 
         // Foldout states
-        static bool _foldRefl2nd   = false;
-        static bool _foldRim2nd    = false;
-        static bool _foldMatcap3rd = false;
-        static bool _foldDecal     = false;
+        static bool _foldRefl2nd    = false;
+        static bool _foldRim2nd     = false;
+        static bool _foldMatcap3rd  = false;
+        static bool _foldNormal3rd  = false;
 
         private const string shaderName = "dennokoworks/DennokoEx";
 
@@ -59,12 +54,10 @@ namespace Dennokoworks
             isShowRenderMode = !material.shader.name.Contains("Optional");
 
             _CustomRefl2ndEnabled         = FindProperty("_CustomRefl2ndEnabled",         props, false);
-            _CustomRefl2ndTex             = FindProperty("_CustomRefl2ndTex",             props, false);
             _CustomRefl2ndMaskTex         = FindProperty("_CustomRefl2ndMaskTex",         props, false);
             _CustomRefl2ndColor           = FindProperty("_CustomRefl2ndColor",           props, false);
             _CustomRefl2ndStrength        = FindProperty("_CustomRefl2ndStrength",        props, false);
-            _CustomRefl2ndAnisotropy      = FindProperty("_CustomRefl2ndAnisotropy",      props, false);
-            _CustomRefl2ndAnisotropyAngle = FindProperty("_CustomRefl2ndAnisotropyAngle", props, false);
+            _CustomRefl2ndSmoothness      = FindProperty("_CustomRefl2ndSmoothness",      props, false);
 
             _CustomRim2ndEnabled          = FindProperty("_CustomRim2ndEnabled",          props, false);
             _CustomRim2ndColor            = FindProperty("_CustomRim2ndColor",            props, false);
@@ -72,6 +65,7 @@ namespace Dennokoworks
             _CustomRim2ndPower            = FindProperty("_CustomRim2ndPower",            props, false);
             _CustomRim2ndStrength         = FindProperty("_CustomRim2ndStrength",         props, false);
             _CustomRim2ndBlendMode        = FindProperty("_CustomRim2ndBlendMode",        props, false);
+            _CustomRim2ndShadowAttenuation = FindProperty("_CustomRim2ndShadowAttenuation", props, false);
 
             _CustomMatcap3rdEnabled       = FindProperty("_CustomMatcap3rdEnabled",       props, false);
             _CustomMatcap3rdTex           = FindProperty("_CustomMatcap3rdTex",           props, false);
@@ -79,17 +73,13 @@ namespace Dennokoworks
             _CustomMatcap3rdColor         = FindProperty("_CustomMatcap3rdColor",         props, false);
             _CustomMatcap3rdStrength      = FindProperty("_CustomMatcap3rdStrength",      props, false);
             _CustomMatcap3rdBlendMode     = FindProperty("_CustomMatcap3rdBlendMode",     props, false);
+            _CustomMatcap3rdShadowAttenuation = FindProperty("_CustomMatcap3rdShadowAttenuation", props, false);
 
-            _CustomDecalEnabled           = FindProperty("_CustomDecalEnabled",           props, false);
-            _CustomDecalSharedMaskTex     = FindProperty("_CustomDecalSharedMaskTex",     props, false);
-            _CustomDecalTex               = FindProperty("_CustomDecalTex",               props, false);
-            _CustomDecalNormalTex         = FindProperty("_CustomDecalNormalTex",         props, false);
-            _CustomDecalNormalStrength    = FindProperty("_CustomDecalNormalStrength",    props, false);
-            _CustomDecalMatcapTex         = FindProperty("_CustomDecalMatcapTex",         props, false);
-            _CustomDecalMatcapStrength    = FindProperty("_CustomDecalMatcapStrength",    props, false);
-            _CustomDecalColor             = FindProperty("_CustomDecalColor",             props, false);
-            _CustomDecalTiling            = FindProperty("_CustomDecalTiling",            props, false);
-            _CustomDecalBlendMode         = FindProperty("_CustomDecalBlendMode",         props, false);
+            _CustomNormal3rdEnabled       = FindProperty("_CustomNormal3rdEnabled",       props, false);
+            _CustomNormal3rdTex           = FindProperty("_CustomNormal3rdTex",           props, false);
+            _CustomNormal3rdMaskTex       = FindProperty("_CustomNormal3rdMaskTex",       props, false);
+            _CustomNormal3rdStrength      = FindProperty("_CustomNormal3rdStrength",      props, false);
+            _CustomNormal3rdTiling        = FindProperty("_CustomNormal3rdTiling",        props, false);
         }
 
         protected override void DrawCustomProperties(Material material)
@@ -101,7 +91,7 @@ namespace Dennokoworks
             DrawRefl2nd();
             DrawRim2nd();
             DrawMatcap3rd();
-            DrawDecal();
+            DrawNormal3rd();
         }
 
         // ========================================================================
@@ -129,7 +119,7 @@ namespace Dennokoworks
         // -- Reflection 2nd --
         void DrawRefl2nd()
         {
-            _foldRefl2nd = Foldout("Reflection 2nd (Anisotropy)", _foldRefl2nd);
+            _foldRefl2nd = Foldout("Reflection 2nd (Specular)", _foldRefl2nd);
             if (_foldRefl2nd)
             {
                 EditorGUILayout.BeginVertical(lilEditorGUI.boxOuter);
@@ -137,13 +127,11 @@ namespace Dennokoworks
                 if (_CustomRefl2ndEnabled != null && _CustomRefl2ndEnabled.floatValue > 0.5f)
                 {
                     EditorGUILayout.BeginVertical(lilEditorGUI.boxInnerHalf);
-                    Prop(_CustomRefl2ndTex,             "Texture");
-                    Prop(_CustomRefl2ndMaskTex,         "Mask");
-                    Prop(_CustomRefl2ndColor,           "Color");
+                    Prop(_CustomRefl2ndMaskTex,    "Mask");
+                    Prop(_CustomRefl2ndColor,      "Color");
                     lilEditorGUI.DrawLine();
-                    Prop(_CustomRefl2ndStrength,        "Strength");
-                    Prop(_CustomRefl2ndAnisotropy,      "Anisotropy");
-                    Prop(_CustomRefl2ndAnisotropyAngle, "Anisotropy Angle (rad)");
+                    Prop(_CustomRefl2ndStrength,   "Strength");
+                    Prop(_CustomRefl2ndSmoothness, "Smoothness");
                     EditorGUILayout.EndVertical();
                 }
                 EditorGUILayout.EndVertical();
@@ -166,6 +154,7 @@ namespace Dennokoworks
                     lilEditorGUI.DrawLine();
                     Prop(_CustomRim2ndPower,     "Power");
                     Prop(_CustomRim2ndStrength,  "Strength");
+                    Prop(_CustomRim2ndShadowAttenuation, "Shadow Attenuation");
                     if (_CustomRim2ndBlendMode != null)
                     {
                         EditorGUI.BeginChangeCheck();
@@ -196,7 +185,8 @@ namespace Dennokoworks
                     Prop(_CustomMatcap3rdMaskTex,  "Mask");
                     Prop(_CustomMatcap3rdColor,    "Color");
                     lilEditorGUI.DrawLine();
-                    Prop(_CustomMatcap3rdStrength, "Strength");
+                    Prop(_CustomMatcap3rdStrength,           "Strength");
+                    Prop(_CustomMatcap3rdShadowAttenuation, "Shadow Attenuation");
                     if (_CustomMatcap3rdBlendMode != null)
                     {
                         EditorGUI.BeginChangeCheck();
@@ -212,51 +202,23 @@ namespace Dennokoworks
             }
         }
 
-        // -- Extra Decal --
-        void DrawDecal()
+        // -- Normal Map 3rd --
+        void DrawNormal3rd()
         {
-            _foldDecal = Foldout("Extra Decal", _foldDecal);
-            if (_foldDecal)
+            _foldNormal3rd = Foldout("Normal Map 3rd", _foldNormal3rd);
+            if (_foldNormal3rd)
             {
                 EditorGUILayout.BeginVertical(lilEditorGUI.boxOuter);
-                DrawToggle(_CustomDecalEnabled);
-                if (_CustomDecalEnabled != null && _CustomDecalEnabled.floatValue > 0.5f)
+                DrawToggle(_CustomNormal3rdEnabled);
+                if (_CustomNormal3rdEnabled != null && _CustomNormal3rdEnabled.floatValue > 0.5f)
                 {
                     EditorGUILayout.BeginVertical(lilEditorGUI.boxInnerHalf);
-
-                    // Shared Mask
-                    EditorGUILayout.LabelField("Shared Mask", lilEditorGUI.boldLabel);
-                    Prop(_CustomDecalSharedMaskTex, "Shared Mask (R)");
+                    Prop(_CustomNormal3rdTex,     "Normal Map");
+                    Prop(_CustomNormal3rdMaskTex, "Mask");
                     lilEditorGUI.DrawLine();
-
-                    // Decal Color
-                    EditorGUILayout.LabelField("Decal Color", lilEditorGUI.boldLabel);
-                    Prop(_CustomDecalTex,       "Texture");
-                    Prop(_CustomDecalColor,     "Color");
-                    if (_CustomDecalTiling != null)
-                        m_MaterialEditor.ShaderProperty(_CustomDecalTiling, "UV (XY=Tiling ZW=Offset)");
-                    if (_CustomDecalBlendMode != null)
-                    {
-                        EditorGUI.BeginChangeCheck();
-                        int mode = EditorGUILayout.Popup("Blend Mode",
-                            (int)_CustomDecalBlendMode.floatValue,
-                            new[] { "Normal (Alpha)", "Add", "Multiply" });
-                        if (EditorGUI.EndChangeCheck())
-                            _CustomDecalBlendMode.floatValue = mode;
-                    }
-                    lilEditorGUI.DrawLine();
-
-                    // Additional Normal
-                    EditorGUILayout.LabelField("Additional Normal", lilEditorGUI.boldLabel);
-                    Prop(_CustomDecalNormalTex,      "Normal Map");
-                    Prop(_CustomDecalNormalStrength, "Normal Strength");
-                    lilEditorGUI.DrawLine();
-
-                    // Decal Matcap
-                    EditorGUILayout.LabelField("Decal Matcap", lilEditorGUI.boldLabel);
-                    Prop(_CustomDecalMatcapTex,      "Matcap Texture");
-                    Prop(_CustomDecalMatcapStrength, "Matcap Strength");
-
+                    Prop(_CustomNormal3rdStrength, "Strength");
+                    if (_CustomNormal3rdTiling != null)
+                        m_MaterialEditor.ShaderProperty(_CustomNormal3rdTiling, "UV (XY=Tiling ZW=Offset)");
                     EditorGUILayout.EndVertical();
                 }
                 EditorGUILayout.EndVertical();
