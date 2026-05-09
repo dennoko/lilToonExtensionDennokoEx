@@ -6,6 +6,11 @@
         _CustomRefl2ndColor ("Reflection 2nd Color", Color) = (1, 1, 1, 1)
         _CustomRefl2ndStrength ("Reflection 2nd Strength", Range(0, 4)) = 1
         _CustomRefl2ndSmoothness ("Reflection 2nd Smoothness", Range(0, 1)) = 0.5
+        _CustomRefl2ndAnisotropic ("Reflection 2nd Anisotropic Mode", Float) = 0
+        _CustomRefl2ndAnisoPrimaryShift ("Reflection 2nd Primary Shift", Range(-1, 1)) = 0
+        _CustomRefl2ndAnisoSecondaryColor ("Reflection 2nd Secondary Color", Color) = (1, 1, 1, 1)
+        _CustomRefl2ndAnisoSecondaryStrength ("Reflection 2nd Secondary Strength", Range(0, 1)) = 0.5
+        _CustomRefl2ndAnisoSecondaryShift ("Reflection 2nd Secondary Shift", Range(-1, 1)) = 0.2
 
         //----------------------------------------------------------------------------------------------------------------------
         // Rim 2nd

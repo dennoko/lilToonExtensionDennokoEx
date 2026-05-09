@@ -13,6 +13,11 @@ namespace Dennokoworks
         MaterialProperty _CustomRefl2ndColor;
         MaterialProperty _CustomRefl2ndStrength;
         MaterialProperty _CustomRefl2ndSmoothness;
+        MaterialProperty _CustomRefl2ndAnisotropic;
+        MaterialProperty _CustomRefl2ndAnisoPrimaryShift;
+        MaterialProperty _CustomRefl2ndAnisoSecondaryColor;
+        MaterialProperty _CustomRefl2ndAnisoSecondaryStrength;
+        MaterialProperty _CustomRefl2ndAnisoSecondaryShift;
 
         // -- Rim 2nd --
         MaterialProperty _CustomRim2ndEnabled;
@@ -52,11 +57,16 @@ namespace Dennokoworks
             ReplaceToCustomShaders();
             isShowRenderMode = !material.shader.name.Contains("Optional");
 
-            _CustomRefl2ndEnabled         = FindProperty("_CustomRefl2ndEnabled",         props, false);
-            _CustomRefl2ndMaskTex         = FindProperty("_CustomRefl2ndMaskTex",         props, false);
-            _CustomRefl2ndColor           = FindProperty("_CustomRefl2ndColor",           props, false);
-            _CustomRefl2ndStrength        = FindProperty("_CustomRefl2ndStrength",        props, false);
-            _CustomRefl2ndSmoothness      = FindProperty("_CustomRefl2ndSmoothness",      props, false);
+            _CustomRefl2ndEnabled              = FindProperty("_CustomRefl2ndEnabled",              props, false);
+            _CustomRefl2ndMaskTex              = FindProperty("_CustomRefl2ndMaskTex",              props, false);
+            _CustomRefl2ndColor                = FindProperty("_CustomRefl2ndColor",                props, false);
+            _CustomRefl2ndStrength             = FindProperty("_CustomRefl2ndStrength",             props, false);
+            _CustomRefl2ndSmoothness           = FindProperty("_CustomRefl2ndSmoothness",           props, false);
+            _CustomRefl2ndAnisotropic          = FindProperty("_CustomRefl2ndAnisotropic",          props, false);
+            _CustomRefl2ndAnisoPrimaryShift    = FindProperty("_CustomRefl2ndAnisoPrimaryShift",    props, false);
+            _CustomRefl2ndAnisoSecondaryColor  = FindProperty("_CustomRefl2ndAnisoSecondaryColor",  props, false);
+            _CustomRefl2ndAnisoSecondaryStrength = FindProperty("_CustomRefl2ndAnisoSecondaryStrength", props, false);
+            _CustomRefl2ndAnisoSecondaryShift  = FindProperty("_CustomRefl2ndAnisoSecondaryShift",  props, false);
 
             _CustomRim2ndEnabled          = FindProperty("_CustomRim2ndEnabled",          props, false);
             _CustomRim2ndColor            = FindProperty("_CustomRim2ndColor",            props, false);
@@ -117,7 +127,7 @@ namespace Dennokoworks
         // -- Reflection 2nd --
         void DrawRefl2nd()
         {
-            _foldRefl2nd = Foldout("Reflection 2nd (Specular)", _foldRefl2nd);
+            _foldRefl2nd = Foldout("Reflection 2nd", _foldRefl2nd);
             if (_foldRefl2nd)
             {
                 EditorGUILayout.BeginVertical(lilEditorGUI.boxOuter);
@@ -130,6 +140,29 @@ namespace Dennokoworks
                     lilEditorGUI.DrawLine();
                     Prop(_CustomRefl2ndStrength,   "Strength");
                     Prop(_CustomRefl2ndSmoothness, "Smoothness");
+                    lilEditorGUI.DrawLine();
+
+                    // Anisotropic mode toggle
+                    bool isAniso = _CustomRefl2ndAnisotropic != null && _CustomRefl2ndAnisotropic.floatValue > 0.5f;
+                    if (_CustomRefl2ndAnisotropic != null)
+                    {
+                        EditorGUI.BeginChangeCheck();
+                        isAniso = EditorGUILayout.Toggle("Anisotropic Mode (Kajiya-Kay)", isAniso);
+                        if (EditorGUI.EndChangeCheck())
+                            _CustomRefl2ndAnisotropic.floatValue = isAniso ? 1f : 0f;
+                    }
+
+                    if (isAniso)
+                    {
+                        EditorGUILayout.LabelField("Primary", lilEditorGUI.boldLabel);
+                        Prop(_CustomRefl2ndAnisoPrimaryShift, "Shift");
+                        lilEditorGUI.DrawLine();
+                        EditorGUILayout.LabelField("Secondary", lilEditorGUI.boldLabel);
+                        Prop(_CustomRefl2ndAnisoSecondaryColor,    "Color");
+                        Prop(_CustomRefl2ndAnisoSecondaryStrength, "Strength");
+                        Prop(_CustomRefl2ndAnisoSecondaryShift,    "Shift");
+                    }
+
                     EditorGUILayout.EndVertical();
                 }
                 EditorGUILayout.EndVertical();

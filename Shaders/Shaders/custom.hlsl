@@ -8,6 +8,11 @@
     float4 _CustomRefl2ndColor; \
     float  _CustomRefl2ndStrength; \
     float  _CustomRefl2ndSmoothness; \
+    float  _CustomRefl2ndAnisotropic; \
+    float  _CustomRefl2ndAnisoPrimaryShift; \
+    float4 _CustomRefl2ndAnisoSecondaryColor; \
+    float  _CustomRefl2ndAnisoSecondaryStrength; \
+    float  _CustomRefl2ndAnisoSecondaryShift; \
     float  _CustomRefl2ndEnabled; \
     float4 _CustomRim2ndColor; \
     float  _CustomRim2ndPower; \
@@ -41,21 +46,34 @@
     if (_CustomNormal3rdEnabled > 0.5) { \
         float2 _n3UV   = fd.uv0 * _CustomNormal3rdTex_ST.xy + _CustomNormal3rdTex_ST.zw; \
         float  _n3Mask = LIL_SAMPLE_2D(_CustomNormal3rdMaskTex, sampler_linear_repeat, fd.uv0).r; \
-        float3 _n3NTS  = LIL_SAMPLE_2D(_CustomNormal3rdTex, sampler_linear_repeat, _n3UV).rgb * 2.0 - 1.0; \
+        float4 _n3Raw  = LIL_SAMPLE_2D(_CustomNormal3rdTex, sampler_linear_repeat, _n3UV); \
+        float3 _n3NTS; \
+        _n3NTS.xy = _n3Raw.ag * 2.0 - 1.0; \
+        _n3NTS.z  = sqrt(max(0.0, 1.0 - dot(_n3NTS.xy, _n3NTS.xy))); \
         float3 _n3WS   = normalize(fd.TBN[0] * _n3NTS.x + fd.TBN[1] * _n3NTS.y + fd.TBN[2] * _n3NTS.z); \
         float  _n3Infl = saturate(_CustomNormal3rdStrength * _n3Mask); \
         fd.N = normalize(lerp(fd.N, _n3WS, _n3Infl)); \
     }
 
-// BEFORE_REFLECTION - 2nd Reflection (Blinn-Phong Specular)
+// BEFORE_REFLECTION - 2nd Reflection (Blinn-Phong or Kajiya-Kay Anisotropic)
 #define BEFORE_REFLECTION \
     if (_CustomRefl2ndEnabled > 0.5) { \
         float  _r2Mask     = LIL_SAMPLE_2D(_CustomRefl2ndMaskTex, sampler_linear_repeat, fd.uv0).r; \
-        float3 _r2H        = normalize(fd.L + fd.V); \
-        float  _r2NdotH    = saturate(dot(fd.N, _r2H)); \
         float  _r2Shininess = exp2(_CustomRefl2ndSmoothness * 10.0 + 1.0); \
-        float  _r2Spec     = pow(_r2NdotH, _r2Shininess); \
-        fd.col.rgb += _CustomRefl2ndColor.rgb * _r2Spec * _CustomRefl2ndStrength * _r2Mask * fd.lightColor; \
+        float3 _r2H        = normalize(fd.L + fd.V); \
+        if (_CustomRefl2ndAnisotropic > 0.5) { \
+            float3 _r2T1    = normalize(fd.TBN[0] + fd.TBN[2] * _CustomRefl2ndAnisoPrimaryShift); \
+            float  _r2TH1   = dot(_r2T1, _r2H); \
+            float  _r2Spec1 = smoothstep(-1.0, 0.0, _r2TH1) * pow(sqrt(max(0.0, 1.0 - _r2TH1 * _r2TH1)), _r2Shininess); \
+            float3 _r2T2    = normalize(fd.TBN[0] + fd.TBN[2] * _CustomRefl2ndAnisoSecondaryShift); \
+            float  _r2TH2   = dot(_r2T2, _r2H); \
+            float  _r2Spec2 = smoothstep(-1.0, 0.0, _r2TH2) * pow(sqrt(max(0.0, 1.0 - _r2TH2 * _r2TH2)), _r2Shininess * 0.5); \
+            fd.col.rgb += (_CustomRefl2ndColor.rgb * _r2Spec1 + _CustomRefl2ndAnisoSecondaryColor.rgb * _r2Spec2 * _CustomRefl2ndAnisoSecondaryStrength) * _CustomRefl2ndStrength * _r2Mask * fd.lightColor; \
+        } else { \
+            float  _r2NdotH = saturate(dot(fd.N, _r2H)); \
+            float  _r2Spec  = pow(_r2NdotH, _r2Shininess); \
+            fd.col.rgb += _CustomRefl2ndColor.rgb * _r2Spec * _CustomRefl2ndStrength * _r2Mask * fd.lightColor; \
+        } \
     }
 
 // BEFORE_RIMLIGHT - 3rd Matcap (Third matcap added after Matcap and 2nd Matcap processing)
