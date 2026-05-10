@@ -41,7 +41,9 @@
     float  _CustomNormal3rdEnabled; \
     float  _CustomRefl2ndLVColorStrength; \
     float  _CustomRefl2ndMainColorStrength; \
-    float  _CustomRim2ndMainColorStrength;
+    float  _CustomRefl2ndBlur; \
+    float  _CustomRim2ndMainColorStrength; \
+    float  _CustomRim2ndBlur;
 
 // Texture Declarations (use 1 shared sampler to stay within ps_4_0 16-sampler limit)
 #define LIL_CUSTOM_TEXTURES \
@@ -89,6 +91,8 @@
             float3 _r2T2 = normalize(fd.TBN[1] + fd.N * _CustomRefl2ndAnisoSecondaryShift); \
             float  _r2TH2   = dot(_r2T2, _r2H); \
             float  _r2Spec2 = smoothstep(-1.0, 0.0, _r2TH2) * pow(sqrt(max(0.0, 1.0 - _r2TH2 * _r2TH2)), _r2Shininess * 0.5); \
+            _r2Spec1 = lerp(step(0.5, _r2Spec1), _r2Spec1, _CustomRefl2ndBlur); \
+            _r2Spec2 = lerp(step(0.5, _r2Spec2), _r2Spec2, _CustomRefl2ndBlur); \
             _r2Out = (_CustomRefl2ndColor.rgb * _r2Spec1 + _CustomRefl2ndAnisoSecondaryColor.rgb * _r2Spec2 * _CustomRefl2ndAnisoSecondaryStrength) * _CustomRefl2ndStrength * _r2Mask * _r2Shadow * fd.lightColor; \
         } else { \
             float3 _r2L0, _r2L1r, _r2L1g, _r2L1b; \
@@ -96,6 +100,9 @@
             float3 _r2Spec = LightVolumeSpecular(float3(1.0, 1.0, 1.0), _CustomRefl2ndSmoothness, 1.0, fd.N, fd.V, _r2L0, _r2L1r, _r2L1g, _r2L1b); \
             float  _r2Lum  = dot(_r2Spec, float3(0.299, 0.587, 0.114)); \
             _r2Spec = lerp(float3(_r2Lum, _r2Lum, _r2Lum), _r2Spec, _CustomRefl2ndLVColorStrength); \
+            float  _r2PostLum = dot(_r2Spec, float3(0.299, 0.587, 0.114)); \
+            float  _r2Shaped  = lerp(step(0.5, _r2PostLum), _r2PostLum, _CustomRefl2ndBlur); \
+            _r2Spec *= _r2Shaped / max(_r2PostLum, 1e-5); \
             _r2Out  = _r2Spec * _CustomRefl2ndColor.rgb * _CustomRefl2ndStrength * _r2Mask; \
         } \
         fd.col.rgb += _r2Out * lerp(float3(1.0, 1.0, 1.0), fd.albedo, _CustomRefl2ndMainColorStrength); \
@@ -115,10 +122,13 @@
             float3 _r2T2    = normalize(fd.TBN[1] + fd.N * _CustomRefl2ndAnisoSecondaryShift); \
             float  _r2TH2   = dot(_r2T2, _r2H); \
             float  _r2Spec2 = smoothstep(-1.0, 0.0, _r2TH2) * pow(sqrt(max(0.0, 1.0 - _r2TH2 * _r2TH2)), _r2Shininess * 0.5); \
+            _r2Spec1 = lerp(step(0.5, _r2Spec1), _r2Spec1, _CustomRefl2ndBlur); \
+            _r2Spec2 = lerp(step(0.5, _r2Spec2), _r2Spec2, _CustomRefl2ndBlur); \
             _r2Out = (_CustomRefl2ndColor.rgb * _r2Spec1 + _CustomRefl2ndAnisoSecondaryColor.rgb * _r2Spec2 * _CustomRefl2ndAnisoSecondaryStrength) * _CustomRefl2ndStrength * _r2Mask * _r2Shadow * fd.lightColor; \
         } else { \
             float  _r2NdotH = saturate(dot(fd.N, _r2H)); \
             float  _r2Spec  = pow(_r2NdotH, _r2Shininess); \
+            _r2Spec = lerp(step(0.5, _r2Spec), _r2Spec, _CustomRefl2ndBlur); \
             _r2Out = _CustomRefl2ndColor.rgb * _r2Spec * _CustomRefl2ndStrength * _r2Mask * _r2Shadow * fd.lightColor; \
         } \
         fd.col.rgb += _r2Out * lerp(float3(1.0, 1.0, 1.0), fd.albedo, _CustomRefl2ndMainColorStrength); \
@@ -150,6 +160,7 @@
         float  _rim2Mask   = LIL_SAMPLE_2D(_CustomRim2ndMaskTex, sampler_linear_repeat, fd.uv0).r; \
         float  _rim2NdotV  = saturate(dot(fd.N, fd.V)); \
         float  _rim2Val    = pow(1.0 - _rim2NdotV, _CustomRim2ndPower); \
+        _rim2Val = lerp(step(0.5, _rim2Val), _rim2Val, _CustomRim2ndBlur); \
         float  _rim2Shadow = lerp(1.0, fd.shadowmix, _CustomRim2ndShadowAttenuation); \
         float  _rim2Amt    = _rim2Val * _CustomRim2ndStrength * _rim2Mask * _rim2Shadow; \
         float3 _rim2Color  = _CustomRim2ndColor.rgb * lerp(float3(1.0, 1.0, 1.0), fd.albedo, _CustomRim2ndMainColorStrength); \

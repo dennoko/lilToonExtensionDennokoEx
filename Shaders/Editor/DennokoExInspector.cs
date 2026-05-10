@@ -21,6 +21,7 @@ namespace Dennokoworks
         MaterialProperty _CustomRefl2ndShadowAttenuation;
         MaterialProperty _CustomRefl2ndLVColorStrength;
         MaterialProperty _CustomRefl2ndMainColorStrength;
+        MaterialProperty _CustomRefl2ndBlur;
 
         // -- Rim 2nd --
         MaterialProperty _CustomRim2ndEnabled;
@@ -31,6 +32,7 @@ namespace Dennokoworks
         MaterialProperty _CustomRim2ndBlendMode;
         MaterialProperty _CustomRim2ndShadowAttenuation;
         MaterialProperty _CustomRim2ndMainColorStrength;
+        MaterialProperty _CustomRim2ndBlur;
 
         // -- Matcap 3rd --
         MaterialProperty _CustomMatcap3rdEnabled;
@@ -76,6 +78,7 @@ namespace Dennokoworks
             _CustomRefl2ndShadowAttenuation    = FindProperty("_CustomRefl2ndShadowAttenuation",    props, false);
             _CustomRefl2ndLVColorStrength      = FindProperty("_CustomRefl2ndLVColorStrength",      props, false);
             _CustomRefl2ndMainColorStrength    = FindProperty("_CustomRefl2ndMainColorStrength",    props, false);
+            _CustomRefl2ndBlur                 = FindProperty("_CustomRefl2ndBlur",                 props, false);
 
             _CustomRim2ndEnabled          = FindProperty("_CustomRim2ndEnabled",          props, false);
             _CustomRim2ndColor            = FindProperty("_CustomRim2ndColor",            props, false);
@@ -85,6 +88,7 @@ namespace Dennokoworks
             _CustomRim2ndBlendMode        = FindProperty("_CustomRim2ndBlendMode",        props, false);
             _CustomRim2ndShadowAttenuation = FindProperty("_CustomRim2ndShadowAttenuation", props, false);
             _CustomRim2ndMainColorStrength = FindProperty("_CustomRim2ndMainColorStrength", props, false);
+            _CustomRim2ndBlur              = FindProperty("_CustomRim2ndBlur",              props, false);
 
             _CustomMatcap3rdEnabled       = FindProperty("_CustomMatcap3rdEnabled",       props, false);
             _CustomMatcap3rdUIEnabled     = FindProperty("_CustomMatcap3rdUIEnabled",     props, false);
@@ -166,6 +170,7 @@ namespace Dennokoworks
                     lilEditorGUI.DrawLine();
                     Prop(_CustomRefl2ndStrength,          "Strength");
                     Prop(_CustomRefl2ndSmoothness,        "Smoothness");
+                    Prop(_CustomRefl2ndBlur,              "Blur");
                     Prop(_CustomRefl2ndLVColorStrength,   "LV Color Strength");
                     Prop(_CustomRefl2ndMainColorStrength, "Main Color Strength");
                     Prop(_CustomRefl2ndShadowAttenuation, "Shadow Attenuation");
@@ -213,6 +218,7 @@ namespace Dennokoworks
                     Prop(_CustomRim2ndMaskTex,   "Mask");
                     lilEditorGUI.DrawLine();
                     Prop(_CustomRim2ndPower,            "Power");
+                    Prop(_CustomRim2ndBlur,             "Blur");
                     Prop(_CustomRim2ndStrength,         "Strength");
                     Prop(_CustomRim2ndMainColorStrength,"Main Color Strength");
                     Prop(_CustomRim2ndShadowAttenuation,"Shadow Attenuation");

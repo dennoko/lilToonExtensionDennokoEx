@@ -14,6 +14,7 @@
         _CustomRefl2ndAnisoSecondaryStrength ("Reflection 2nd Secondary Strength", Range(0, 1)) = 0.5
         _CustomRefl2ndAnisoSecondaryShift ("Reflection 2nd Secondary Shift", Range(-1, 1)) = 0.2
         _CustomRefl2ndShadowAttenuation ("Reflection 2nd Shadow Attenuation", Range(0, 1)) = 0
+        _CustomRefl2ndBlur ("Reflection 2nd Blur", Range(0, 1)) = 1
 
         //----------------------------------------------------------------------------------------------------------------------
         // Rim 2nd
@@ -25,6 +26,7 @@
         _CustomRim2ndMainColorStrength ("Rim 2nd Main Color Strength", Range(0, 1)) = 0
         _CustomRim2ndBlendMode ("Rim 2nd Blend Mode", Float) = 0
         _CustomRim2ndShadowAttenuation ("Rim 2nd Shadow Attenuation", Range(0, 1)) = 0
+        _CustomRim2ndBlur ("Rim 2nd Blur", Range(0, 1)) = 1
 
         //----------------------------------------------------------------------------------------------------------------------
         // Matcap 3rd
