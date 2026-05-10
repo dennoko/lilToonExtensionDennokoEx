@@ -6,6 +6,8 @@
         _CustomRefl2ndColor ("Reflection 2nd Color", Color) = (1, 1, 1, 1)
         _CustomRefl2ndStrength ("Reflection 2nd Strength", Range(0, 4)) = 1
         _CustomRefl2ndSmoothness ("Reflection 2nd Smoothness", Range(0, 1)) = 0.5
+        _CustomRefl2ndLVColorStrength ("Reflection 2nd LV Color Strength", Range(0, 1)) = 1
+        _CustomRefl2ndMainColorStrength ("Reflection 2nd Main Color Strength", Range(0, 1)) = 0
         _CustomRefl2ndAnisotropic ("Reflection 2nd Anisotropic Mode", Float) = 0
         _CustomRefl2ndAnisoPrimaryShift ("Reflection 2nd Primary Shift", Range(-1, 1)) = 0
         _CustomRefl2ndAnisoSecondaryColor ("Reflection 2nd Secondary Color", Color) = (1, 1, 1, 1)
@@ -20,6 +22,7 @@
         _CustomRim2ndMaskTex ("Rim 2nd Mask", 2D) = "white" {}
         _CustomRim2ndPower ("Rim 2nd Power", Range(0.1, 8)) = 3
         _CustomRim2ndStrength ("Rim 2nd Strength", Range(0, 1)) = 0.5
+        _CustomRim2ndMainColorStrength ("Rim 2nd Main Color Strength", Range(0, 1)) = 0
         _CustomRim2ndBlendMode ("Rim 2nd Blend Mode", Float) = 0
         _CustomRim2ndShadowAttenuation ("Rim 2nd Shadow Attenuation", Range(0, 1)) = 0
 

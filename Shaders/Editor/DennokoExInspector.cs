@@ -19,6 +19,8 @@ namespace Dennokoworks
         MaterialProperty _CustomRefl2ndAnisoSecondaryStrength;
         MaterialProperty _CustomRefl2ndAnisoSecondaryShift;
         MaterialProperty _CustomRefl2ndShadowAttenuation;
+        MaterialProperty _CustomRefl2ndLVColorStrength;
+        MaterialProperty _CustomRefl2ndMainColorStrength;
 
         // -- Rim 2nd --
         MaterialProperty _CustomRim2ndEnabled;
@@ -28,6 +30,7 @@ namespace Dennokoworks
         MaterialProperty _CustomRim2ndStrength;
         MaterialProperty _CustomRim2ndBlendMode;
         MaterialProperty _CustomRim2ndShadowAttenuation;
+        MaterialProperty _CustomRim2ndMainColorStrength;
 
         // -- Matcap 3rd --
         MaterialProperty _CustomMatcap3rdEnabled;
@@ -71,6 +74,8 @@ namespace Dennokoworks
             _CustomRefl2ndAnisoSecondaryStrength = FindProperty("_CustomRefl2ndAnisoSecondaryStrength", props, false);
             _CustomRefl2ndAnisoSecondaryShift  = FindProperty("_CustomRefl2ndAnisoSecondaryShift",  props, false);
             _CustomRefl2ndShadowAttenuation    = FindProperty("_CustomRefl2ndShadowAttenuation",    props, false);
+            _CustomRefl2ndLVColorStrength      = FindProperty("_CustomRefl2ndLVColorStrength",      props, false);
+            _CustomRefl2ndMainColorStrength    = FindProperty("_CustomRefl2ndMainColorStrength",    props, false);
 
             _CustomRim2ndEnabled          = FindProperty("_CustomRim2ndEnabled",          props, false);
             _CustomRim2ndColor            = FindProperty("_CustomRim2ndColor",            props, false);
@@ -79,6 +84,7 @@ namespace Dennokoworks
             _CustomRim2ndStrength         = FindProperty("_CustomRim2ndStrength",         props, false);
             _CustomRim2ndBlendMode        = FindProperty("_CustomRim2ndBlendMode",        props, false);
             _CustomRim2ndShadowAttenuation = FindProperty("_CustomRim2ndShadowAttenuation", props, false);
+            _CustomRim2ndMainColorStrength = FindProperty("_CustomRim2ndMainColorStrength", props, false);
 
             _CustomMatcap3rdEnabled       = FindProperty("_CustomMatcap3rdEnabled",       props, false);
             _CustomMatcap3rdUIEnabled     = FindProperty("_CustomMatcap3rdUIEnabled",     props, false);
@@ -159,8 +165,10 @@ namespace Dennokoworks
                     Prop(_CustomRefl2ndColor,      "Color");
                     lilEditorGUI.DrawLine();
                     Prop(_CustomRefl2ndStrength,          "Strength");
-                    Prop(_CustomRefl2ndShadowAttenuation, "Shadow Attenuation");
                     Prop(_CustomRefl2ndSmoothness,        "Smoothness");
+                    Prop(_CustomRefl2ndLVColorStrength,   "LV Color Strength");
+                    Prop(_CustomRefl2ndMainColorStrength, "Main Color Strength");
+                    Prop(_CustomRefl2ndShadowAttenuation, "Shadow Attenuation");
                     lilEditorGUI.DrawLine();
 
                     // Anisotropic mode toggle
@@ -204,9 +212,10 @@ namespace Dennokoworks
                     Prop(_CustomRim2ndColor,     "Color");
                     Prop(_CustomRim2ndMaskTex,   "Mask");
                     lilEditorGUI.DrawLine();
-                    Prop(_CustomRim2ndPower,     "Power");
-                    Prop(_CustomRim2ndStrength,  "Strength");
-                    Prop(_CustomRim2ndShadowAttenuation, "Shadow Attenuation");
+                    Prop(_CustomRim2ndPower,            "Power");
+                    Prop(_CustomRim2ndStrength,         "Strength");
+                    Prop(_CustomRim2ndMainColorStrength,"Main Color Strength");
+                    Prop(_CustomRim2ndShadowAttenuation,"Shadow Attenuation");
                     if (_CustomRim2ndBlendMode != null)
                     {
                         EditorGUI.BeginChangeCheck();

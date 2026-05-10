@@ -3,6 +3,16 @@
 // Features: 2nd Reflection (Specular) / 2nd Rim / 3rd Matcap / 3rd Normal Map
 //----------------------------------------------------------------------------------------------------------------------
 
+// VRC Light Volumes optional integration (package detected at compile time via direct include)
+// To disable and fall back to no-VRCLV branch, add: #define DNKW_DISABLE_VRCLV
+#include "UnityCG.cginc"
+#if !defined(DNKW_DISABLE_VRCLV)
+    #include "Packages/red.sim.lightvolumes/Shaders/LightVolumes.cginc"
+    #define DNKW_VRCLV_AVAILABLE 1
+#else
+    #define DNKW_VRCLV_AVAILABLE 0
+#endif
+
 // CBUFFER Variable Declarations
 #define LIL_CUSTOM_PROPERTIES \
     float4 _CustomRefl2ndColor; \
@@ -28,7 +38,10 @@
     float  _CustomMatcap3rdEnabled; \
     float4 _CustomNormal3rdTex_ST; \
     float  _CustomNormal3rdStrength; \
-    float  _CustomNormal3rdEnabled;
+    float  _CustomNormal3rdEnabled; \
+    float  _CustomRefl2ndLVColorStrength; \
+    float  _CustomRefl2ndMainColorStrength; \
+    float  _CustomRim2ndMainColorStrength;
 
 // Texture Declarations (use 1 shared sampler to stay within ps_4_0 16-sampler limit)
 #define LIL_CUSTOM_TEXTURES \
@@ -57,13 +70,16 @@
     }
 
 // BEFORE_REFLECTION - 2nd Reflection
-// Isotropic : LightVolumeSpecular (GGX, RGB per-channel) when LV headers are available; Blinn-Phong fallback otherwise.
-// Anisotropic: Kajiya-Kay unchanged (uses fd.L).
-#if defined(OPENLIT_VRCLIGHTVOLUMES) || defined(OPENLIT_VRCLIGHTVOLUMES_WITHOUTPACKAGE)
+// Isotropic (VRCLV): LightVolumeSpecular with LV color intensity control.
+//   _CustomRefl2ndLVColorStrength: 0=LV輝度のみ(色無し), 1=LV色をフルで受け取る(デフォルト)
+// Anisotropic: Kajiya-Kay (fd.L / fd.lightColor)
+// 両パス共通: _CustomRefl2ndMainColorStrength でfd.albedoを最終出力に乗算
+#if DNKW_VRCLV_AVAILABLE
 #define BEFORE_REFLECTION \
     if (_CustomRefl2ndEnabled > 0.5) { \
         float  _r2Mask   = LIL_SAMPLE_2D(_CustomRefl2ndMaskTex, sampler_linear_repeat, fd.uv0).r; \
         float  _r2Shadow = lerp(1.0, fd.shadowmix, _CustomRefl2ndShadowAttenuation); \
+        float3 _r2Out; \
         if (_CustomRefl2ndAnisotropic > 0.5) { \
             float  _r2Shininess = exp2(_CustomRefl2ndSmoothness * 10.0 + 1.0); \
             float3 _r2H  = normalize(fd.L + fd.V); \
@@ -73,13 +89,16 @@
             float3 _r2T2 = normalize(fd.TBN[1] + fd.N * _CustomRefl2ndAnisoSecondaryShift); \
             float  _r2TH2   = dot(_r2T2, _r2H); \
             float  _r2Spec2 = smoothstep(-1.0, 0.0, _r2TH2) * pow(sqrt(max(0.0, 1.0 - _r2TH2 * _r2TH2)), _r2Shininess * 0.5); \
-            fd.col.rgb += (_CustomRefl2ndColor.rgb * _r2Spec1 + _CustomRefl2ndAnisoSecondaryColor.rgb * _r2Spec2 * _CustomRefl2ndAnisoSecondaryStrength) * _CustomRefl2ndStrength * _r2Mask * _r2Shadow * fd.lightColor; \
+            _r2Out = (_CustomRefl2ndColor.rgb * _r2Spec1 + _CustomRefl2ndAnisoSecondaryColor.rgb * _r2Spec2 * _CustomRefl2ndAnisoSecondaryStrength) * _CustomRefl2ndStrength * _r2Mask * _r2Shadow * fd.lightColor; \
         } else { \
             float3 _r2L0, _r2L1r, _r2L1g, _r2L1b; \
             LightVolumeSH(fd.positionWS, _r2L0, _r2L1r, _r2L1g, _r2L1b); \
-            float3 _r2Spec = LightVolumeSpecular(float3(0.04, 0.04, 0.04), _CustomRefl2ndSmoothness, fd.N, fd.V, _r2L0, _r2L1r, _r2L1g, _r2L1b); \
-            fd.col.rgb += _r2Spec * _CustomRefl2ndColor.rgb * _CustomRefl2ndStrength * _r2Mask * _r2Shadow; \
+            float3 _r2Spec = LightVolumeSpecular(float3(1.0, 1.0, 1.0), _CustomRefl2ndSmoothness, 1.0, fd.N, fd.V, _r2L0, _r2L1r, _r2L1g, _r2L1b); \
+            float  _r2Lum  = dot(_r2Spec, float3(0.299, 0.587, 0.114)); \
+            _r2Spec = lerp(float3(_r2Lum, _r2Lum, _r2Lum), _r2Spec, _CustomRefl2ndLVColorStrength); \
+            _r2Out  = _r2Spec * _CustomRefl2ndColor.rgb * _CustomRefl2ndStrength * _r2Mask; \
         } \
+        fd.col.rgb += _r2Out * lerp(float3(1.0, 1.0, 1.0), fd.albedo, _CustomRefl2ndMainColorStrength); \
     }
 #else
 #define BEFORE_REFLECTION \
@@ -88,6 +107,7 @@
         float  _r2Shininess = exp2(_CustomRefl2ndSmoothness * 10.0 + 1.0); \
         float  _r2Shadow    = lerp(1.0, fd.shadowmix, _CustomRefl2ndShadowAttenuation); \
         float3 _r2H         = normalize(fd.L + fd.V); \
+        float3 _r2Out; \
         if (_CustomRefl2ndAnisotropic > 0.5) { \
             float3 _r2T1    = normalize(fd.TBN[1] + fd.N * _CustomRefl2ndAnisoPrimaryShift); \
             float  _r2TH1   = dot(_r2T1, _r2H); \
@@ -95,12 +115,13 @@
             float3 _r2T2    = normalize(fd.TBN[1] + fd.N * _CustomRefl2ndAnisoSecondaryShift); \
             float  _r2TH2   = dot(_r2T2, _r2H); \
             float  _r2Spec2 = smoothstep(-1.0, 0.0, _r2TH2) * pow(sqrt(max(0.0, 1.0 - _r2TH2 * _r2TH2)), _r2Shininess * 0.5); \
-            fd.col.rgb += (_CustomRefl2ndColor.rgb * _r2Spec1 + _CustomRefl2ndAnisoSecondaryColor.rgb * _r2Spec2 * _CustomRefl2ndAnisoSecondaryStrength) * _CustomRefl2ndStrength * _r2Mask * _r2Shadow * fd.lightColor; \
+            _r2Out = (_CustomRefl2ndColor.rgb * _r2Spec1 + _CustomRefl2ndAnisoSecondaryColor.rgb * _r2Spec2 * _CustomRefl2ndAnisoSecondaryStrength) * _CustomRefl2ndStrength * _r2Mask * _r2Shadow * fd.lightColor; \
         } else { \
             float  _r2NdotH = saturate(dot(fd.N, _r2H)); \
             float  _r2Spec  = pow(_r2NdotH, _r2Shininess); \
-            fd.col.rgb += _CustomRefl2ndColor.rgb * _r2Spec * _CustomRefl2ndStrength * _r2Mask * _r2Shadow * fd.lightColor; \
+            _r2Out = _CustomRefl2ndColor.rgb * _r2Spec * _CustomRefl2ndStrength * _r2Mask * _r2Shadow * fd.lightColor; \
         } \
+        fd.col.rgb += _r2Out * lerp(float3(1.0, 1.0, 1.0), fd.albedo, _CustomRefl2ndMainColorStrength); \
     }
 #endif
 
@@ -131,10 +152,11 @@
         float  _rim2Val    = pow(1.0 - _rim2NdotV, _CustomRim2ndPower); \
         float  _rim2Shadow = lerp(1.0, fd.shadowmix, _CustomRim2ndShadowAttenuation); \
         float  _rim2Amt    = _rim2Val * _CustomRim2ndStrength * _rim2Mask * _rim2Shadow; \
+        float3 _rim2Color  = _CustomRim2ndColor.rgb * lerp(float3(1.0, 1.0, 1.0), fd.albedo, _CustomRim2ndMainColorStrength); \
         if (_CustomRim2ndBlendMode < 0.5) { \
-            fd.col.rgb += _CustomRim2ndColor.rgb * _rim2Amt; \
+            fd.col.rgb += _rim2Color * _rim2Amt; \
         } else { \
-            fd.col.rgb = lerp(fd.col.rgb, fd.col.rgb * _CustomRim2ndColor.rgb, _rim2Amt); \
+            fd.col.rgb = lerp(fd.col.rgb, fd.col.rgb * _rim2Color, _rim2Amt); \
         } \
     }
 
