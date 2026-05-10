@@ -56,13 +56,38 @@
         fd.N = normalize(lerp(fd.N, _n3WS, _n3Infl)); \
     }
 
-// BEFORE_REFLECTION - 2nd Reflection (Blinn-Phong or Kajiya-Kay Anisotropic)
+// BEFORE_REFLECTION - 2nd Reflection
+// Isotropic : LightVolumeSpecular (GGX, RGB per-channel) when LV headers are available; Blinn-Phong fallback otherwise.
+// Anisotropic: Kajiya-Kay unchanged (uses fd.L).
+#if defined(OPENLIT_VRCLIGHTVOLUMES) || defined(OPENLIT_VRCLIGHTVOLUMES_WITHOUTPACKAGE)
 #define BEFORE_REFLECTION \
     if (_CustomRefl2ndEnabled > 0.5) { \
-        float  _r2Mask     = LIL_SAMPLE_2D(_CustomRefl2ndMaskTex, sampler_linear_repeat, fd.uv0).r; \
+        float  _r2Mask   = LIL_SAMPLE_2D(_CustomRefl2ndMaskTex, sampler_linear_repeat, fd.uv0).r; \
+        float  _r2Shadow = lerp(1.0, fd.shadowmix, _CustomRefl2ndShadowAttenuation); \
+        if (_CustomRefl2ndAnisotropic > 0.5) { \
+            float  _r2Shininess = exp2(_CustomRefl2ndSmoothness * 10.0 + 1.0); \
+            float3 _r2H  = normalize(fd.L + fd.V); \
+            float3 _r2T1 = normalize(fd.TBN[1] + fd.N * _CustomRefl2ndAnisoPrimaryShift); \
+            float  _r2TH1   = dot(_r2T1, _r2H); \
+            float  _r2Spec1 = smoothstep(-1.0, 0.0, _r2TH1) * pow(sqrt(max(0.0, 1.0 - _r2TH1 * _r2TH1)), _r2Shininess); \
+            float3 _r2T2 = normalize(fd.TBN[1] + fd.N * _CustomRefl2ndAnisoSecondaryShift); \
+            float  _r2TH2   = dot(_r2T2, _r2H); \
+            float  _r2Spec2 = smoothstep(-1.0, 0.0, _r2TH2) * pow(sqrt(max(0.0, 1.0 - _r2TH2 * _r2TH2)), _r2Shininess * 0.5); \
+            fd.col.rgb += (_CustomRefl2ndColor.rgb * _r2Spec1 + _CustomRefl2ndAnisoSecondaryColor.rgb * _r2Spec2 * _CustomRefl2ndAnisoSecondaryStrength) * _CustomRefl2ndStrength * _r2Mask * _r2Shadow * fd.lightColor; \
+        } else { \
+            float3 _r2L0, _r2L1r, _r2L1g, _r2L1b; \
+            LightVolumeSH(fd.positionWS, _r2L0, _r2L1r, _r2L1g, _r2L1b); \
+            float3 _r2Spec = LightVolumeSpecular(float3(0.04, 0.04, 0.04), _CustomRefl2ndSmoothness, fd.N, fd.V, _r2L0, _r2L1r, _r2L1g, _r2L1b); \
+            fd.col.rgb += _r2Spec * _CustomRefl2ndColor.rgb * _CustomRefl2ndStrength * _r2Mask * _r2Shadow; \
+        } \
+    }
+#else
+#define BEFORE_REFLECTION \
+    if (_CustomRefl2ndEnabled > 0.5) { \
+        float  _r2Mask      = LIL_SAMPLE_2D(_CustomRefl2ndMaskTex, sampler_linear_repeat, fd.uv0).r; \
         float  _r2Shininess = exp2(_CustomRefl2ndSmoothness * 10.0 + 1.0); \
-        float  _r2Shadow   = lerp(1.0, fd.shadowmix, _CustomRefl2ndShadowAttenuation); \
-        float3 _r2H        = normalize(fd.L + fd.V); \
+        float  _r2Shadow    = lerp(1.0, fd.shadowmix, _CustomRefl2ndShadowAttenuation); \
+        float3 _r2H         = normalize(fd.L + fd.V); \
         if (_CustomRefl2ndAnisotropic > 0.5) { \
             float3 _r2T1    = normalize(fd.TBN[1] + fd.N * _CustomRefl2ndAnisoPrimaryShift); \
             float  _r2TH1   = dot(_r2T1, _r2H); \
@@ -77,6 +102,7 @@
             fd.col.rgb += _CustomRefl2ndColor.rgb * _r2Spec * _CustomRefl2ndStrength * _r2Mask * _r2Shadow * fd.lightColor; \
         } \
     }
+#endif
 
 // BEFORE_RIMLIGHT - 3rd Matcap (Third matcap added after Matcap and 2nd Matcap processing)
 #define BEFORE_RIMLIGHT \
