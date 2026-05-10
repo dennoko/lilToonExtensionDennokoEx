@@ -59,6 +59,8 @@ namespace Dennokoworks
 
         private const string shaderName = "dennokoworks/DennokoEx";
 
+        static string Loc(string key) => DennokoExLanguage.Get(key);
+
         protected override void LoadCustomProperties(MaterialProperty[] props, Material material)
         {
             isCustomShader = true;
@@ -157,7 +159,7 @@ namespace Dennokoworks
         // -- Reflection 2nd --
         void DrawRefl2nd()
         {
-            _foldRefl2nd = Foldout("Reflection 2nd", _foldRefl2nd);
+            _foldRefl2nd = Foldout(Loc("foldout_refl2nd"), _foldRefl2nd);
             if (_foldRefl2nd)
             {
                 EditorGUILayout.BeginVertical(lilEditorGUI.boxOuter);
@@ -165,15 +167,15 @@ namespace Dennokoworks
                 if (_CustomRefl2ndEnabled != null && _CustomRefl2ndEnabled.floatValue > 0.5f)
                 {
                     EditorGUILayout.BeginVertical(lilEditorGUI.boxInnerHalf);
-                    Prop(_CustomRefl2ndMaskTex,    "Mask");
-                    Prop(_CustomRefl2ndColor,      "Color");
+                    Prop(_CustomRefl2ndMaskTex,    Loc("label_mask"));
+                    Prop(_CustomRefl2ndColor,      Loc("label_color"));
                     lilEditorGUI.DrawLine();
-                    Prop(_CustomRefl2ndStrength,          "Strength");
-                    Prop(_CustomRefl2ndSmoothness,        "Smoothness");
-                    Prop(_CustomRefl2ndBlur,              "Blur");
-                    Prop(_CustomRefl2ndLVColorStrength,   "LV Color Strength");
-                    Prop(_CustomRefl2ndMainColorStrength, "Main Color Strength");
-                    Prop(_CustomRefl2ndShadowAttenuation, "Shadow Attenuation");
+                    Prop(_CustomRefl2ndStrength,          Loc("label_strength"));
+                    Prop(_CustomRefl2ndSmoothness,        Loc("label_smoothness"));
+                    Prop(_CustomRefl2ndBlur,              Loc("label_blur"));
+                    Prop(_CustomRefl2ndLVColorStrength,   Loc("label_lv_color_strength"));
+                    Prop(_CustomRefl2ndMainColorStrength, Loc("label_main_color_strength"));
+                    Prop(_CustomRefl2ndShadowAttenuation, Loc("label_shadow_attenuation"));
                     lilEditorGUI.DrawLine();
 
                     // Anisotropic mode toggle
@@ -181,20 +183,20 @@ namespace Dennokoworks
                     if (_CustomRefl2ndAnisotropic != null)
                     {
                         EditorGUI.BeginChangeCheck();
-                        isAniso = EditorGUILayout.Toggle("Anisotropic Mode (Kajiya-Kay)", isAniso);
+                        isAniso = EditorGUILayout.Toggle(Loc("label_anisotropic"), isAniso);
                         if (EditorGUI.EndChangeCheck())
                             _CustomRefl2ndAnisotropic.floatValue = isAniso ? 1f : 0f;
                     }
 
                     if (isAniso)
                     {
-                        EditorGUILayout.LabelField("Primary", lilEditorGUI.boldLabel);
-                        Prop(_CustomRefl2ndAnisoPrimaryShift, "Shift");
+                        EditorGUILayout.LabelField(Loc("label_primary"), lilEditorGUI.boldLabel);
+                        Prop(_CustomRefl2ndAnisoPrimaryShift, Loc("label_shift"));
                         lilEditorGUI.DrawLine();
-                        EditorGUILayout.LabelField("Secondary", lilEditorGUI.boldLabel);
-                        Prop(_CustomRefl2ndAnisoSecondaryColor,    "Color");
-                        Prop(_CustomRefl2ndAnisoSecondaryStrength, "Strength");
-                        Prop(_CustomRefl2ndAnisoSecondaryShift,    "Shift");
+                        EditorGUILayout.LabelField(Loc("label_secondary"), lilEditorGUI.boldLabel);
+                        Prop(_CustomRefl2ndAnisoSecondaryColor,    Loc("label_color"));
+                        Prop(_CustomRefl2ndAnisoSecondaryStrength, Loc("label_strength"));
+                        Prop(_CustomRefl2ndAnisoSecondaryShift,    Loc("label_shift"));
                     }
 
                     EditorGUILayout.EndVertical();
@@ -206,7 +208,7 @@ namespace Dennokoworks
         // -- Rim 2nd --
         void DrawRim2nd()
         {
-            _foldRim2nd = Foldout("Rim 2nd", _foldRim2nd);
+            _foldRim2nd = Foldout(Loc("foldout_rim2nd"), _foldRim2nd);
             if (_foldRim2nd)
             {
                 EditorGUILayout.BeginVertical(lilEditorGUI.boxOuter);
@@ -214,20 +216,20 @@ namespace Dennokoworks
                 if (_CustomRim2ndEnabled != null && _CustomRim2ndEnabled.floatValue > 0.5f)
                 {
                     EditorGUILayout.BeginVertical(lilEditorGUI.boxInnerHalf);
-                    Prop(_CustomRim2ndColor,     "Color");
-                    Prop(_CustomRim2ndMaskTex,   "Mask");
+                    Prop(_CustomRim2ndColor,     Loc("label_color"));
+                    Prop(_CustomRim2ndMaskTex,   Loc("label_mask"));
                     lilEditorGUI.DrawLine();
-                    Prop(_CustomRim2ndPower,            "Power");
-                    Prop(_CustomRim2ndBlur,             "Blur");
-                    Prop(_CustomRim2ndStrength,         "Strength");
-                    Prop(_CustomRim2ndMainColorStrength,"Main Color Strength");
-                    Prop(_CustomRim2ndShadowAttenuation,"Shadow Attenuation");
+                    Prop(_CustomRim2ndPower,            Loc("label_power"));
+                    Prop(_CustomRim2ndBlur,             Loc("label_blur"));
+                    Prop(_CustomRim2ndStrength,         Loc("label_strength"));
+                    Prop(_CustomRim2ndMainColorStrength, Loc("label_main_color_strength"));
+                    Prop(_CustomRim2ndShadowAttenuation, Loc("label_shadow_attenuation"));
                     if (_CustomRim2ndBlendMode != null)
                     {
                         EditorGUI.BeginChangeCheck();
-                        int mode = EditorGUILayout.Popup("Blend Mode",
+                        int mode = EditorGUILayout.Popup(Loc("label_blend_mode"),
                             (int)_CustomRim2ndBlendMode.floatValue,
-                            new[] { "Rim Light (Add)", "Rim Shade (Multiply)" });
+                            new[] { Loc("blend_rim_add"), Loc("blend_rim_mul") });
                         if (EditorGUI.EndChangeCheck())
                             _CustomRim2ndBlendMode.floatValue = mode;
                     }
@@ -241,7 +243,7 @@ namespace Dennokoworks
         void DrawMatcap3rd()
         {
             SyncEffectiveEnabled(_CustomMatcap3rdEnabled, _CustomMatcap3rdUIEnabled, _CustomMatcap3rdTex);
-            _foldMatcap3rd = Foldout("Matcap 3rd", _foldMatcap3rd);
+            _foldMatcap3rd = Foldout(Loc("foldout_matcap3rd"), _foldMatcap3rd);
             if (_foldMatcap3rd)
             {
                 EditorGUILayout.BeginVertical(lilEditorGUI.boxOuter);
@@ -253,20 +255,20 @@ namespace Dennokoworks
                 {
                     EditorGUILayout.BeginVertical(lilEditorGUI.boxInnerHalf);
                     EditorGUI.BeginChangeCheck();
-                    Prop(_CustomMatcap3rdTex,      "Texture");
+                    Prop(_CustomMatcap3rdTex,      Loc("label_texture"));
                     if (EditorGUI.EndChangeCheck())
                         SyncEffectiveEnabled(_CustomMatcap3rdEnabled, _CustomMatcap3rdUIEnabled, _CustomMatcap3rdTex);
-                    Prop(_CustomMatcap3rdMaskTex,  "Mask");
-                    Prop(_CustomMatcap3rdColor,    "Color");
+                    Prop(_CustomMatcap3rdMaskTex,  Loc("label_mask"));
+                    Prop(_CustomMatcap3rdColor,    Loc("label_color"));
                     lilEditorGUI.DrawLine();
-                    Prop(_CustomMatcap3rdStrength,          "Strength");
-                    Prop(_CustomMatcap3rdShadowAttenuation, "Shadow Attenuation");
+                    Prop(_CustomMatcap3rdStrength,          Loc("label_strength"));
+                    Prop(_CustomMatcap3rdShadowAttenuation, Loc("label_shadow_attenuation"));
                     if (_CustomMatcap3rdBlendMode != null)
                     {
                         EditorGUI.BeginChangeCheck();
-                        int mode = EditorGUILayout.Popup("Blend Mode",
+                        int mode = EditorGUILayout.Popup(Loc("label_blend_mode"),
                             (int)_CustomMatcap3rdBlendMode.floatValue,
-                            new[] { "Add", "Multiply", "Screen" });
+                            new[] { Loc("blend_add"), Loc("blend_mul"), Loc("blend_screen") });
                         if (EditorGUI.EndChangeCheck())
                             _CustomMatcap3rdBlendMode.floatValue = mode;
                     }
@@ -280,7 +282,7 @@ namespace Dennokoworks
         void DrawNormal3rd()
         {
             SyncEffectiveEnabled(_CustomNormal3rdEnabled, _CustomNormal3rdUIEnabled, _CustomNormal3rdTex);
-            _foldNormal3rd = Foldout("Normal Map 3rd", _foldNormal3rd);
+            _foldNormal3rd = Foldout(Loc("foldout_normal3rd"), _foldNormal3rd);
             if (_foldNormal3rd)
             {
                 EditorGUILayout.BeginVertical(lilEditorGUI.boxOuter);
@@ -292,12 +294,12 @@ namespace Dennokoworks
                 {
                     EditorGUILayout.BeginVertical(lilEditorGUI.boxInnerHalf);
                     EditorGUI.BeginChangeCheck();
-                    Prop(_CustomNormal3rdTex, "Normal Map");
+                    Prop(_CustomNormal3rdTex, Loc("label_normal_map"));
                     if (EditorGUI.EndChangeCheck())
                         SyncEffectiveEnabled(_CustomNormal3rdEnabled, _CustomNormal3rdUIEnabled, _CustomNormal3rdTex);
-                    Prop(_CustomNormal3rdMaskTex, "Mask");
+                    Prop(_CustomNormal3rdMaskTex, Loc("label_mask"));
                     lilEditorGUI.DrawLine();
-                    Prop(_CustomNormal3rdStrength, "Strength");
+                    Prop(_CustomNormal3rdStrength, Loc("label_strength"));
                     EditorGUILayout.EndVertical();
                 }
                 EditorGUILayout.EndVertical();
