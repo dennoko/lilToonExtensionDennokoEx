@@ -1,2 +1,5 @@
 .claude
 *.meta
+# Auto-generated VRCLV inject file — environment-specific, ignored by Unity (~ suffix).
+# Run "Window > DennokoEx > Prepare for Export" before releasing.
+**/DennokoEx_VRCLV_Inject.cginc~
