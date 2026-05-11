@@ -1,4 +1,6 @@
 #if UNITY_EDITOR
+using System.Collections.Generic;
+using System.Linq;
 using UnityEditor;
 using UnityEngine;
 using lilToon;
@@ -57,6 +59,13 @@ namespace Dennokoworks
         static bool _foldMatcap3rd  = false;
         static bool _foldNormal3rd  = false;
 
+        // Copy/paste buffer
+        static Dictionary<string, float>   _clipFloats   = new Dictionary<string, float>();
+        static Dictionary<string, Color>   _clipColors   = new Dictionary<string, Color>();
+        static Dictionary<string, Vector4> _clipVectors  = new Dictionary<string, Vector4>();
+        static Dictionary<string, Texture> _clipTextures = new Dictionary<string, Texture>();
+        static bool _clipHasContent = false;
+
         private const string shaderName = "dennokoworks/DennokoEx";
 
         static string Loc(string key) => DennokoExLanguage.Get(key);
@@ -113,12 +122,10 @@ namespace Dennokoworks
             if (_CustomNormal3rdEnabled?.floatValue > 0.5f && _CustomNormal3rdUIEnabled?.floatValue < 0.5f)
                 _CustomNormal3rdUIEnabled.floatValue = 1f;
         }
-
+        
         protected override void DrawCustomProperties(Material material)
         {
-            EditorGUILayout.Space(8);
             EditorGUILayout.LabelField("DennokoEx", EditorStyles.centeredGreyMiniLabel);
-            EditorGUILayout.Space(4);
 
             DrawRefl2nd();
             DrawRim2nd();
@@ -156,10 +163,109 @@ namespace Dennokoworks
             if (prop != null) m_MaterialEditor.ShaderProperty(prop, label);
         }
 
+        // ========================================================================
+        //  Copy/Paste section menu (gear icon, same position as lilToon)
+        // ========================================================================
+        void DrawSectionMenu(MaterialProperty[] props)
+        {
+            var rect = GUILayoutUtility.GetLastRect();
+            rect.xMin = rect.xMax - 24f;
+            rect.width = 24f;
+
+            if (GUI.Button(rect, EditorGUIUtility.IconContent("_Popup"), new GUIStyle("IconButton")))
+            {
+                // Capture array for closure
+                var captured = props;
+                var menu = new GenericMenu();
+                menu.AddItem(new GUIContent(Loc("menu_copy")),          false, () => CopySection(captured, false));
+                menu.AddItem(new GUIContent(Loc("menu_copy_with_tex")), false, () => CopySection(captured, true));
+                menu.AddSeparator("");
+                if (_clipHasContent)
+                    menu.AddItem(    new GUIContent(Loc("menu_paste")), false, () => PasteSection(captured));
+                else
+                    menu.AddDisabledItem(new GUIContent(Loc("menu_paste")));
+                menu.ShowAsContext();
+            }
+        }
+
+        void CopySection(MaterialProperty[] props, bool includeTextures)
+        {
+            _clipFloats.Clear();
+            _clipColors.Clear();
+            _clipVectors.Clear();
+            _clipTextures.Clear();
+            _clipHasContent = true;
+
+            foreach (var p in props)
+            {
+                if (p == null) continue;
+                switch (p.type)
+                {
+                    case MaterialProperty.PropType.Float:
+                    case MaterialProperty.PropType.Range:
+                        _clipFloats[p.name] = p.floatValue;
+                        break;
+                    case MaterialProperty.PropType.Color:
+                        _clipColors[p.name] = p.colorValue;
+                        break;
+                    case MaterialProperty.PropType.Vector:
+                        _clipVectors[p.name] = p.vectorValue;
+                        break;
+                    case MaterialProperty.PropType.Texture:
+                        if (includeTextures)
+                            _clipTextures[p.name] = p.textureValue;
+                        break;
+                }
+            }
+        }
+
+        void PasteSection(MaterialProperty[] props)
+        {
+            var targets = props
+                .Where(p => p != null)
+                .SelectMany(p => p.targets)
+                .Distinct()
+                .ToArray();
+
+            if (targets.Length > 0)
+                Undo.RecordObjects(targets, "Paste DennokoEx Section");
+
+            foreach (var p in props)
+            {
+                if (p == null) continue;
+                switch (p.type)
+                {
+                    case MaterialProperty.PropType.Float:
+                    case MaterialProperty.PropType.Range:
+                        if (_clipFloats.TryGetValue(p.name, out float f))  p.floatValue    = f;
+                        break;
+                    case MaterialProperty.PropType.Color:
+                        if (_clipColors.TryGetValue(p.name, out Color c))  p.colorValue    = c;
+                        break;
+                    case MaterialProperty.PropType.Vector:
+                        if (_clipVectors.TryGetValue(p.name, out Vector4 v)) p.vectorValue = v;
+                        break;
+                    case MaterialProperty.PropType.Texture:
+                        if (_clipTextures.TryGetValue(p.name, out Texture t)) p.textureValue = t;
+                        break;
+                }
+            }
+        }
+
         // -- Reflection 2nd --
         void DrawRefl2nd()
         {
             _foldRefl2nd = Foldout(Loc("foldout_refl2nd"), _foldRefl2nd);
+            DrawSectionMenu(new[] {
+                _CustomRefl2ndEnabled,
+                _CustomRefl2ndMaskTex,          _CustomRefl2ndColor,
+                _CustomRefl2ndStrength,         _CustomRefl2ndSmoothness,
+                _CustomRefl2ndBlur,             _CustomRefl2ndLVColorStrength,
+                _CustomRefl2ndMainColorStrength, _CustomRefl2ndShadowAttenuation,
+                _CustomRefl2ndAnisotropic,      _CustomRefl2ndAnisoPrimaryShift,
+                _CustomRefl2ndAnisoSecondaryColor, _CustomRefl2ndAnisoSecondaryStrength,
+                _CustomRefl2ndAnisoSecondaryShift,
+            });
             if (_foldRefl2nd)
             {
                 EditorGUILayout.BeginVertical(lilEditorGUI.boxOuter);
@@ -209,6 +315,13 @@ namespace Dennokoworks
         void DrawRim2nd()
         {
             _foldRim2nd = Foldout(Loc("foldout_rim2nd"), _foldRim2nd);
+            DrawSectionMenu(new[] {
+                _CustomRim2ndEnabled,
+                _CustomRim2ndColor,            _CustomRim2ndMaskTex,
+                _CustomRim2ndPower,            _CustomRim2ndBlur,
+                _CustomRim2ndStrength,         _CustomRim2ndMainColorStrength,
+                _CustomRim2ndShadowAttenuation, _CustomRim2ndBlendMode,
+            });
             if (_foldRim2nd)
             {
                 EditorGUILayout.BeginVertical(lilEditorGUI.boxOuter);
@@ -244,6 +357,12 @@ namespace Dennokoworks
         {
             SyncEffectiveEnabled(_CustomMatcap3rdEnabled, _CustomMatcap3rdUIEnabled, _CustomMatcap3rdTex);
             _foldMatcap3rd = Foldout(Loc("foldout_matcap3rd"), _foldMatcap3rd);
+            DrawSectionMenu(new[] {
+                _CustomMatcap3rdEnabled,       _CustomMatcap3rdUIEnabled,
+                _CustomMatcap3rdTex,           _CustomMatcap3rdMaskTex,
+                _CustomMatcap3rdColor,         _CustomMatcap3rdStrength,
+                _CustomMatcap3rdBlendMode,     _CustomMatcap3rdShadowAttenuation,
+            });
             if (_foldMatcap3rd)
             {
                 EditorGUILayout.BeginVertical(lilEditorGUI.boxOuter);
@@ -283,6 +402,11 @@ namespace Dennokoworks
         {
             SyncEffectiveEnabled(_CustomNormal3rdEnabled, _CustomNormal3rdUIEnabled, _CustomNormal3rdTex);
             _foldNormal3rd = Foldout(Loc("foldout_normal3rd"), _foldNormal3rd);
+            DrawSectionMenu(new[] {
+                _CustomNormal3rdEnabled,   _CustomNormal3rdUIEnabled,
+                _CustomNormal3rdTex,       _CustomNormal3rdMaskTex,
+                _CustomNormal3rdStrength,
+            });
             if (_foldNormal3rd)
             {
                 EditorGUILayout.BeginVertical(lilEditorGUI.boxOuter);

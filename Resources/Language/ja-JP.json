@@ -23,5 +23,8 @@
   "blend_rim_mul": "リムシェード (乗算)",
   "blend_add": "加算",
   "blend_mul": "乗算",
-  "blend_screen": "スクリーン"
+  "blend_screen": "スクリーン",
+  "menu_copy": "コピー",
+  "menu_copy_with_tex": "コピー（テクスチャを含む）",
+  "menu_paste": "ペースト"
 }

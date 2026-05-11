@@ -23,5 +23,8 @@
   "blend_rim_mul": "Rim Shade (Multiply)",
   "blend_add": "Add",
   "blend_mul": "Multiply",
-  "blend_screen": "Screen"
+  "blend_screen": "Screen",
+  "menu_copy": "Copy",
+  "menu_copy_with_tex": "Copy (with Textures)",
+  "menu_paste": "Paste"
 }
