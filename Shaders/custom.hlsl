@@ -38,6 +38,7 @@
     float  _CustomRefl2ndLVColorStrength; \
     float  _CustomRefl2ndMainColorStrength; \
     float  _CustomRefl2ndBlur; \
+    float4 _CustomRefl2ndMaskTex_ST; \
     float  _CustomRim2ndMainColorStrength; \
     float  _CustomRim2ndBlur;
 
@@ -75,7 +76,8 @@
 #if DNKW_VRCLV_AVAILABLE
 #define BEFORE_REFLECTION \
     if (_CustomRefl2ndEnabled > 0.5) { \
-        float  _r2Mask   = LIL_SAMPLE_2D(_CustomRefl2ndMaskTex, sampler_linear_repeat, fd.uv0).r; \
+        float2 _r2MaskUV = fd.uv0 * _CustomRefl2ndMaskTex_ST.xy + _CustomRefl2ndMaskTex_ST.zw; \
+        float  _r2Mask   = LIL_SAMPLE_2D(_CustomRefl2ndMaskTex, sampler_linear_repeat, _r2MaskUV).r; \
         float  _r2Shadow = lerp(1.0, fd.shadowmix, _CustomRefl2ndShadowAttenuation); \
         float3 _r2Out; \
         if (_CustomRefl2ndAnisotropic > 0.5) { \
@@ -106,7 +108,8 @@
 #else
 #define BEFORE_REFLECTION \
     if (_CustomRefl2ndEnabled > 0.5) { \
-        float  _r2Mask      = LIL_SAMPLE_2D(_CustomRefl2ndMaskTex, sampler_linear_repeat, fd.uv0).r; \
+        float2 _r2MaskUV    = fd.uv0 * _CustomRefl2ndMaskTex_ST.xy + _CustomRefl2ndMaskTex_ST.zw; \
+        float  _r2Mask      = LIL_SAMPLE_2D(_CustomRefl2ndMaskTex, sampler_linear_repeat, _r2MaskUV).r; \
         float  _r2Shininess = exp2(_CustomRefl2ndSmoothness * 10.0 + 1.0); \
         float  _r2Shadow    = lerp(1.0, fd.shadowmix, _CustomRefl2ndShadowAttenuation); \
         float3 _r2H         = normalize(fd.L + fd.V); \
