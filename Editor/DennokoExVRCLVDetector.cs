@@ -20,7 +20,11 @@ namespace Dennokoworks
 
         static DennokoExVRCLVDetector()
         {
-            Events.registeredPackages += _ => EditorApplication.delayCall += Regenerate;
+            // On package add/remove: write inject file and schedule bridge reimport.
+            // Unity's post-install compile is likely still running at this point, so
+            // we defer the ImportAsset call until the editor is fully idle to avoid
+            // triggering a second heavy shader compile pass on top of Unity's own.
+            Events.registeredPackages += _ => EditorApplication.delayCall += RegenerateAfterPackageChange;
             SetupGitSkipWorktree();
             Regenerate();
         }
@@ -28,17 +32,8 @@ namespace Dennokoworks
         [MenuItem("Window/DennokoEx/Regenerate VRCLV Bridge")]
         public static void Regenerate()
         {
-            bool available = AssetDatabase.IsValidFolder(VRCLVFolder);
-            string content = available ? ContentAvailable() : ContentUnavailable();
-
-            string fullPath = Path.GetFullPath(InjectAsset);
-            if (File.Exists(fullPath) && File.ReadAllText(fullPath, Encoding.UTF8) == content)
-                return;
-
-            File.WriteAllText(fullPath, content, Encoding.UTF8);
-            // Reimport bridge (normal asset) so Unity recompiles all transitively dependent shaders.
-            EditorApplication.delayCall += () =>
-                AssetDatabase.ImportAsset(BridgeAsset, ImportAssetOptions.ForceUpdate);
+            if (!WriteInjectIfChanged()) return;
+            ScheduleBridgeReimportWhenIdle();
         }
 
         // Resets inject file to safe default (VRCLV=0) before distributing the package.
@@ -54,8 +49,7 @@ namespace Dennokoworks
                 return;
             }
             File.WriteAllText(fullPath, safe, Encoding.UTF8);
-            EditorApplication.delayCall += () =>
-                AssetDatabase.ImportAsset(BridgeAsset, ImportAssetOptions.ForceUpdate);
+            ScheduleBridgeReimportWhenIdle();
             EditorUtility.DisplayDialog("DennokoEx", "DennokoEx_VRCLV_Inject.cginc~ has been reset to safe default.\nYou can now export the package.", "OK");
         }
 
@@ -74,6 +68,46 @@ namespace Dennokoworks
                 Process.Start(psi);
             }
             catch { } // Silently ignore if git is unavailable or this is not a git repo
+        }
+
+        // Called via delayCall when packages are registered/unregistered.
+        // Unity's own post-install shader compile may still be in progress here,
+        // so we schedule the bridge reimport to run only once Unity is fully idle.
+        static void RegenerateAfterPackageChange()
+        {
+            WriteInjectIfChanged();
+            ScheduleBridgeReimportWhenIdle();
+        }
+
+        // Polls until Unity is neither compiling nor updating, then reimports the bridge.
+        // This prevents stacking our forced shader recompile on top of Unity's own,
+        // which was causing editor freezes when VRCLV was added mid-compilation.
+        static void ScheduleBridgeReimportWhenIdle()
+        {
+            EditorApplication.delayCall += TryBridgeReimport;
+        }
+
+        static void TryBridgeReimport()
+        {
+            if (EditorApplication.isCompiling || EditorApplication.isUpdating)
+            {
+                // Not idle yet — check again next frame.
+                EditorApplication.delayCall += TryBridgeReimport;
+                return;
+            }
+            AssetDatabase.ImportAsset(BridgeAsset, ImportAssetOptions.ForceUpdate);
+        }
+
+        // Returns true if the inject file was written (content changed).
+        static bool WriteInjectIfChanged()
+        {
+            bool available = AssetDatabase.IsValidFolder(VRCLVFolder);
+            string content = available ? ContentAvailable() : ContentUnavailable();
+            string fullPath = Path.GetFullPath(InjectAsset);
+            if (File.Exists(fullPath) && File.ReadAllText(fullPath, Encoding.UTF8) == content)
+                return false;
+            File.WriteAllText(fullPath, content, Encoding.UTF8);
+            return true;
         }
 
         static string ContentAvailable() =>
