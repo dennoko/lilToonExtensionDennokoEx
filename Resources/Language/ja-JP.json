@@ -26,5 +26,10 @@
   "blend_screen": "スクリーン",
   "menu_copy": "コピー",
   "menu_copy_with_tex": "コピー（テクスチャを含む）",
-  "menu_paste": "ペースト"
+  "menu_paste": "ペースト",
+  "foldout_normalext": "ノーマルマップ 1st/2nd 拡張",
+  "label_normal1st": "ノーマルマップ 1st",
+  "label_normal2nd": "ノーマルマップ 2nd",
+  "label_scroll_u": "スクロール速度 U",
+  "label_scroll_v": "スクロール速度 V"
 }

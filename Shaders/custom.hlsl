@@ -40,7 +40,11 @@
     float  _CustomRefl2ndBlur; \
     float4 _CustomRefl2ndMaskTex_ST; \
     float  _CustomRim2ndMainColorStrength; \
-    float  _CustomRim2ndBlur;
+    float  _CustomRim2ndBlur; \
+    float  _CustomBump1stScrollU; \
+    float  _CustomBump1stScrollV; \
+    float  _CustomBump2ndScrollU; \
+    float  _CustomBump2ndScrollV;
 
 // Texture Declarations (use 1 shared sampler to stay within ps_4_0 16-sampler limit)
 #define LIL_CUSTOM_TEXTURES \
@@ -49,23 +53,62 @@
     TEXTURE2D(_CustomMatcap3rdTex); \
     TEXTURE2D(_CustomMatcap3rdMaskTex); \
     TEXTURE2D(_CustomNormal3rdTex); \
-    TEXTURE2D(_CustomNormal3rdMaskTex);
+    TEXTURE2D(_CustomNormal3rdMaskTex); \
+    TEXTURE2D(_CustomBump1stMaskTex);
 
 // Add vertex copy
 #define LIL_CUSTOM_VERT_COPY
 
+// OVERRIDE_NORMAL_1ST - Normal Map 1st with mask and UV scroll
+// Defined before lil_common_frag.hlsl is included so the #if !defined() guard there is skipped.
+// _CustomBump1stMaskTex: per-pixel scale mask (default white = full strength)
+// _CustomBump1stScrollU/V: UV scroll speed in units/sec (default 0 = no scroll)
+#define OVERRIDE_NORMAL_1ST \
+    if(_UseBumpMap) \
+    { \
+        float2 _n1UV   = fd.uvMain + float2(_CustomBump1stScrollU, _CustomBump1stScrollV) * _Time.y; \
+        float4 _n1Tex  = LIL_SAMPLE_2D_ST(_BumpMap, sampler_MainTex, _n1UV); \
+        float  _n1Mask = LIL_SAMPLE_2D(_CustomBump1stMaskTex, sampler_linear_repeat, fd.uvMain).r; \
+        normalmap      = lilUnpackNormalScale(_n1Tex, _BumpScale * _n1Mask); \
+    }
+
+// OVERRIDE_NORMAL_2ND - Normal Map 2nd with UV scroll
+// Preserves: UVMode selection, Bump2ndScale, Bump2ndScaleMask, lilBlendNormal
+// _CustomBump2ndScrollU/V: UV scroll speed in units/sec (default 0 = no scroll)
+#define OVERRIDE_NORMAL_2ND \
+    if(_UseBump2ndMap) \
+    { \
+        float2 _n2UV    = fd.uv0; \
+        if(_Bump2ndMap_UVMode == 1) _n2UV = fd.uv1; \
+        if(_Bump2ndMap_UVMode == 2) _n2UV = fd.uv2; \
+        if(_Bump2ndMap_UVMode == 3) _n2UV = fd.uv3; \
+        _n2UV          += float2(_CustomBump2ndScrollU, _CustomBump2ndScrollV) * _Time.y; \
+        float4 _n2Tex   = LIL_SAMPLE_2D_ST(_Bump2ndMap, lil_sampler_linear_repeat, _n2UV); \
+        float  _n2Scale = _Bump2ndScale * LIL_SAMPLE_2D_ST(_Bump2ndScaleMask, sampler_MainTex, fd.uvMain).r; \
+        normalmap       = lilBlendNormal(normalmap, lilUnpackNormalScale(_n2Tex, _n2Scale)); \
+    }
+
 // BEFORE_AUDIOLINK - 3rd Normal Map (composited after lilToon's normal map pipeline)
+// Uses lilBlendNormal-style tangent-space compositing (same as 1st→2nd blend),
+// so strength never overwrites the 1st/2nd result — it additively layers on top.
+// fd.reflectionN/matcapN/matcap2ndN/uvMat are updated here because they were set
+// from the pre-3rd fd.N earlier in the pipeline (lil_pass_forward_normal.hlsl:314-316).
 #define BEFORE_AUDIOLINK \
     if (_CustomNormal3rdEnabled > 0.5) { \
-        float2 _n3UV   = fd.uv0 * _CustomNormal3rdTex_ST.xy + _CustomNormal3rdTex_ST.zw; \
-        float  _n3Mask = LIL_SAMPLE_2D(_CustomNormal3rdMaskTex, sampler_linear_repeat, fd.uv0).r; \
-        float4 _n3Raw  = LIL_SAMPLE_2D(_CustomNormal3rdTex, sampler_linear_repeat, _n3UV); \
+        float2 _n3UV    = fd.uv0 * _CustomNormal3rdTex_ST.xy + _CustomNormal3rdTex_ST.zw; \
+        float  _n3Mask  = LIL_SAMPLE_2D(_CustomNormal3rdMaskTex, sampler_linear_repeat, fd.uv0).r; \
+        float4 _n3Raw   = LIL_SAMPLE_2D(_CustomNormal3rdTex, sampler_linear_repeat, _n3UV); \
         float3 _n3NTS; \
-        _n3NTS.xy = _n3Raw.ag * 2.0 - 1.0; \
-        _n3NTS.z  = sqrt(max(0.0, 1.0 - dot(_n3NTS.xy, _n3NTS.xy))); \
-        float3 _n3WS   = normalize(fd.TBN[0] * _n3NTS.x + fd.TBN[1] * _n3NTS.y + fd.TBN[2] * _n3NTS.z); \
-        float  _n3Infl = saturate(_CustomNormal3rdStrength * _n3Mask); \
-        fd.N = normalize(lerp(fd.N, _n3WS, _n3Infl)); \
+        _n3NTS.xy       = _n3Raw.ag * 2.0 - 1.0; \
+        _n3NTS.xy      *= saturate(_CustomNormal3rdStrength * _n3Mask); \
+        _n3NTS.z        = sqrt(max(0.0, 1.0 - dot(_n3NTS.xy, _n3NTS.xy))); \
+        float3 _nCurTS  = mul(fd.TBN, fd.N); \
+        float3 _nBlend  = float3(_nCurTS.xy + _n3NTS.xy, _nCurTS.z * _n3NTS.z); \
+        fd.N            = normalize(mul(_nBlend, fd.TBN)); \
+        fd.reflectionN  = fd.N; \
+        fd.matcapN      = fd.N; \
+        fd.matcap2ndN   = fd.N; \
+        fd.uvMat        = mul(fd.cameraMatrix, fd.N).xy * 0.5 + 0.5; \
     }
 
 // BEFORE_REFLECTION - 2nd Reflection

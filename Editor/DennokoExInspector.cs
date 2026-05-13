@@ -53,11 +53,19 @@ namespace Dennokoworks
         MaterialProperty _CustomNormal3rdMaskTex;
         MaterialProperty _CustomNormal3rdStrength;
 
+        // -- Normal Map 1st/2nd Ext --
+        MaterialProperty _CustomBump1stMaskTex;
+        MaterialProperty _CustomBump1stScrollU;
+        MaterialProperty _CustomBump1stScrollV;
+        MaterialProperty _CustomBump2ndScrollU;
+        MaterialProperty _CustomBump2ndScrollV;
+
         // Foldout states
-        static bool _foldRefl2nd    = false;
-        static bool _foldRim2nd     = false;
-        static bool _foldMatcap3rd  = false;
-        static bool _foldNormal3rd  = false;
+        static bool _foldRefl2nd      = false;
+        static bool _foldRim2nd       = false;
+        static bool _foldMatcap3rd    = false;
+        static bool _foldNormal3rd    = false;
+        static bool _foldNormalExt    = false;
 
         // Copy/paste buffer
         static Dictionary<string, float>   _clipFloats   = new Dictionary<string, float>();
@@ -116,6 +124,12 @@ namespace Dennokoworks
             _CustomNormal3rdMaskTex       = FindProperty("_CustomNormal3rdMaskTex",       props, false);
             _CustomNormal3rdStrength      = FindProperty("_CustomNormal3rdStrength",      props, false);
 
+            _CustomBump1stMaskTex         = FindProperty("_CustomBump1stMaskTex",         props, false);
+            _CustomBump1stScrollU         = FindProperty("_CustomBump1stScrollU",         props, false);
+            _CustomBump1stScrollV         = FindProperty("_CustomBump1stScrollV",         props, false);
+            _CustomBump2ndScrollU         = FindProperty("_CustomBump2ndScrollU",         props, false);
+            _CustomBump2ndScrollV         = FindProperty("_CustomBump2ndScrollV",         props, false);
+
             // Migrate pre-UIEnabled materials: Enabled=1 but UIEnabled not yet set
             if (_CustomMatcap3rdEnabled?.floatValue > 0.5f && _CustomMatcap3rdUIEnabled?.floatValue < 0.5f)
                 _CustomMatcap3rdUIEnabled.floatValue = 1f;
@@ -131,6 +145,7 @@ namespace Dennokoworks
             DrawRim2nd();
             DrawMatcap3rd();
             DrawNormal3rd();
+            DrawNormalExt();
         }
 
         // ========================================================================
@@ -426,6 +441,37 @@ namespace Dennokoworks
                     Prop(_CustomNormal3rdStrength, Loc("label_strength"));
                     EditorGUILayout.EndVertical();
                 }
+                EditorGUILayout.EndVertical();
+            }
+        }
+
+        // -- Normal Map 1st/2nd Ext --
+        void DrawNormalExt()
+        {
+            _foldNormalExt = Foldout(Loc("foldout_normalext"), _foldNormalExt);
+            DrawSectionMenu(new[] {
+                _CustomBump1stMaskTex,
+                _CustomBump1stScrollU, _CustomBump1stScrollV,
+                _CustomBump2ndScrollU, _CustomBump2ndScrollV,
+            });
+            if (_foldNormalExt)
+            {
+                EditorGUILayout.BeginVertical(lilEditorGUI.boxOuter);
+                EditorGUILayout.BeginVertical(lilEditorGUI.boxInnerHalf);
+
+                EditorGUILayout.LabelField(Loc("label_normal1st"), lilEditorGUI.boldLabel);
+                Prop(_CustomBump1stMaskTex, Loc("label_mask"));
+                lilEditorGUI.DrawLine();
+                Prop(_CustomBump1stScrollU, Loc("label_scroll_u"));
+                Prop(_CustomBump1stScrollV, Loc("label_scroll_v"));
+
+                lilEditorGUI.DrawLine();
+
+                EditorGUILayout.LabelField(Loc("label_normal2nd"), lilEditorGUI.boldLabel);
+                Prop(_CustomBump2ndScrollU, Loc("label_scroll_u"));
+                Prop(_CustomBump2ndScrollV, Loc("label_scroll_v"));
+
+                EditorGUILayout.EndVertical();
                 EditorGUILayout.EndVertical();
             }
         }

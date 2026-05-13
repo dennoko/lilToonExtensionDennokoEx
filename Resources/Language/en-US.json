@@ -26,5 +26,10 @@
   "blend_screen": "Screen",
   "menu_copy": "Copy",
   "menu_copy_with_tex": "Copy (with Textures)",
-  "menu_paste": "Paste"
+  "menu_paste": "Paste",
+  "foldout_normalext": "Normal Map 1st/2nd Ext",
+  "label_normal1st": "Normal Map 1st",
+  "label_normal2nd": "Normal Map 2nd",
+  "label_scroll_u": "Scroll Speed U",
+  "label_scroll_v": "Scroll Speed V"
 }
