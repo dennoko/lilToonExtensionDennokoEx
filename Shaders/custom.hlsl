@@ -1,6 +1,6 @@
 //----------------------------------------------------------------------------------------------------------------------
 // DennokoEx custom.hlsl - lilToon 2.x Extended Shader
-// Features: 2nd Reflection (Specular) / 2nd Rim / 3rd Matcap / 3rd Normal Map
+// Features: 2nd Reflection (Specular) / 2nd Rim / 3rd Normal Map / Decal
 //----------------------------------------------------------------------------------------------------------------------
 
 // VRC Light Volumes optional integration.
@@ -27,11 +27,6 @@
     float  _CustomRim2ndBlendMode; \
     float  _CustomRim2ndShadowAttenuation; \
     float  _CustomRim2ndEnabled; \
-    float4 _CustomMatcap3rdColor; \
-    float  _CustomMatcap3rdStrength; \
-    float  _CustomMatcap3rdBlendMode; \
-    float  _CustomMatcap3rdShadowAttenuation; \
-    float  _CustomMatcap3rdEnabled; \
     float4 _CustomNormal3rdTex_ST; \
     float  _CustomNormal3rdStrength; \
     float  _CustomNormal3rdEnabled; \
@@ -41,40 +36,64 @@
     float4 _CustomRefl2ndMaskTex_ST; \
     float  _CustomRim2ndMainColorStrength; \
     float  _CustomRim2ndBlur; \
-    float  _CustomBump1stScrollU; \
-    float  _CustomBump1stScrollV; \
-    float  _CustomBump2ndScrollU; \
-    float  _CustomBump2ndScrollV;
+    float  _CustomMain2ndShadowDisable; \
+    float  _CustomMain3rdShadowDisable; \
+    float4 _CustomDecalColor; \
+    float  _CustomDecalAlpha; \
+    float  _CustomDecalBlendMode; \
+    float  _CustomDecalShadowDisable; \
+    float  _CustomDecalEnabled; \
+    float  _CustomDecalPosX; \
+    float  _CustomDecalPosY; \
+    float  _CustomDecalSizeX; \
+    float  _CustomDecalSizeY; \
+    float  _CustomDecalAngle; \
+    float4 _CustomDecalMatcapColor; \
+    float  _CustomDecalMatcapAlpha; \
+    float  _CustomDecalMatcapBlendMode; \
+    float  _CustomDecalMatcapShadowDisable; \
+    float  _CustomDecalMatcapEnabled;
 
 // Texture Declarations (use 1 shared sampler to stay within ps_4_0 16-sampler limit)
 #define LIL_CUSTOM_TEXTURES \
     TEXTURE2D(_CustomRefl2ndMaskTex); \
     TEXTURE2D(_CustomRim2ndMaskTex); \
-    TEXTURE2D(_CustomMatcap3rdTex); \
-    TEXTURE2D(_CustomMatcap3rdMaskTex); \
     TEXTURE2D(_CustomNormal3rdTex); \
     TEXTURE2D(_CustomNormal3rdMaskTex); \
-    TEXTURE2D(_CustomBump1stMaskTex);
+    TEXTURE2D(_CustomBump1stMaskTex); \
+    TEXTURE2D(_CustomDecalTex); \
+    TEXTURE2D(_CustomDecalMaskTex); \
+    TEXTURE2D(_CustomDecalMatcapTex);
 
 // Add vertex copy
 #define LIL_CUSTOM_VERT_COPY
 
-// OVERRIDE_NORMAL_1ST - Normal Map 1st with mask and UV scroll
-// Defined before lil_common_frag.hlsl is included so the #if !defined() guard there is skipped.
+// Blend helper for decal: mode 0=Replace, 1=Add, 2=Screen, 3=Multiply
+// alpha is pre-multiplied into overlay for Add/Screen modes, used as lerp weight for Replace/Multiply
+float3 DNKW_DecalBlend(float3 base, float3 overlay, float alpha, float mode)
+{
+    float3 mReplace  = lerp(base, overlay, alpha);
+    float3 mAdd      = base + overlay * alpha;
+    float3 mScreen   = 1.0 - (1.0 - base) * (1.0 - overlay * alpha);
+    float3 mMultiply = lerp(base, base * overlay, alpha);
+    float3 r = mReplace;
+    r = lerp(r, mAdd,      step(0.5, mode));
+    r = lerp(r, mScreen,   step(1.5, mode));
+    r = lerp(r, mMultiply, step(2.5, mode));
+    return r;
+}
+
+// OVERRIDE_NORMAL_1ST - Normal Map 1st with per-pixel scale mask
 // _CustomBump1stMaskTex: per-pixel scale mask (default white = full strength)
-// _CustomBump1stScrollU/V: UV scroll speed in units/sec (default 0 = no scroll)
 #define OVERRIDE_NORMAL_1ST \
     if(_UseBumpMap) \
     { \
-        float2 _n1UV   = fd.uvMain + float2(_CustomBump1stScrollU, _CustomBump1stScrollV) * _Time.y; \
-        float4 _n1Tex  = LIL_SAMPLE_2D_ST(_BumpMap, sampler_MainTex, _n1UV); \
+        float4 _n1Tex  = LIL_SAMPLE_2D_ST(_BumpMap, sampler_MainTex, fd.uvMain); \
         float  _n1Mask = LIL_SAMPLE_2D(_CustomBump1stMaskTex, sampler_linear_repeat, fd.uvMain).r; \
         normalmap      = lilUnpackNormalScale(_n1Tex, _BumpScale * _n1Mask); \
     }
 
-// OVERRIDE_NORMAL_2ND - Normal Map 2nd with UV scroll
-// Preserves: UVMode selection, Bump2ndScale, Bump2ndScaleMask, lilBlendNormal
-// _CustomBump2ndScrollU/V: UV scroll speed in units/sec (default 0 = no scroll)
+// OVERRIDE_NORMAL_2ND - Normal Map 2nd preserving UVMode and blend
 #define OVERRIDE_NORMAL_2ND \
     if(_UseBump2ndMap) \
     { \
@@ -82,14 +101,20 @@
         if(_Bump2ndMap_UVMode == 1) _n2UV = fd.uv1; \
         if(_Bump2ndMap_UVMode == 2) _n2UV = fd.uv2; \
         if(_Bump2ndMap_UVMode == 3) _n2UV = fd.uv3; \
-        _n2UV          += float2(_CustomBump2ndScrollU, _CustomBump2ndScrollV) * _Time.y; \
         float4 _n2Tex   = LIL_SAMPLE_2D_ST(_Bump2ndMap, lil_sampler_linear_repeat, _n2UV); \
         float  _n2Scale = _Bump2ndScale * LIL_SAMPLE_2D_ST(_Bump2ndScaleMask, sampler_MainTex, fd.uvMain).r; \
         normalmap       = lilBlendNormal(normalmap, lilUnpackNormalScale(_n2Tex, _n2Scale)); \
     }
 
-// BEFORE_AUDIOLINK - 3rd Normal Map (composited after lilToon's normal map pipeline)
-// Uses lilBlendNormal-style tangent-space compositing (same as 1st→2nd blend),
+// BEFORE_MAIN2ND / BEFORE_MAIN3RD - save pre-layer colors for shadow suppress correction
+#define BEFORE_MAIN2ND \
+    float3 _dnkw_pre2nd = fd.col.rgb;
+
+#define BEFORE_MAIN3RD \
+    float3 _dnkw_pre3rd = fd.col.rgb;
+
+// BEFORE_AUDIOLINK - 3rd Normal Map (composited after lilToon's normal pipeline)
+// Uses lilBlendNormal-style tangent-space compositing (same as 1st->2nd blend),
 // so strength never overwrites the 1st/2nd result — it additively layers on top.
 // fd.reflectionN/matcapN/matcap2ndN/uvMat are updated here because they were set
 // from the pre-3rd fd.N earlier in the pipeline (lil_pass_forward_normal.hlsl:314-316).
@@ -177,22 +202,78 @@
     }
 #endif
 
-// BEFORE_RIMLIGHT - 3rd Matcap (Third matcap added after Matcap and 2nd Matcap processing)
-#define BEFORE_RIMLIGHT \
-    if (_CustomMatcap3rdEnabled > 0.5) { \
-        float3 _mc3NVS  = mul((float3x3)UNITY_MATRIX_V, fd.N); \
-        float2 _mc3UV   = _mc3NVS.xy * 0.5 + 0.5; \
-        float4 _mc3Tex  = LIL_SAMPLE_2D(_CustomMatcap3rdTex, sampler_linear_repeat, _mc3UV); \
-        float  _mc3Mask = LIL_SAMPLE_2D(_CustomMatcap3rdMaskTex, sampler_linear_repeat, fd.uv0).r; \
-        float  _mc3ShadowFactor = lerp(1.0, fd.shadowmix, _CustomMatcap3rdShadowAttenuation); \
-        float3 _mc3Color = _mc3Tex.rgb * _CustomMatcap3rdColor.rgb * _mc3Mask * _mc3ShadowFactor; \
-        if (_CustomMatcap3rdBlendMode < 0.5) { \
-            fd.col.rgb += _mc3Color * _CustomMatcap3rdStrength; \
-        } else if (_CustomMatcap3rdBlendMode < 1.5) { \
-            fd.col.rgb *= lerp(float3(1.0, 1.0, 1.0), _mc3Color, _CustomMatcap3rdStrength); \
-        } else { \
-            fd.col.rgb = 1.0 - (1.0 - fd.col.rgb) * (1.0 - _mc3Color * _CustomMatcap3rdStrength); \
+// BEFORE_MATCAP - Main 2nd/3rd shadow suppress + Decal UV setup + Decal base map
+//
+// Shadow suppress: at this hook fd.shadowmix is available and fd.albedo is the full
+// pre-lighting unlit color. _dnkw_pre2nd/_dnkw_pre3rd were captured at BEFORE_MAIN2ND/3RD.
+// The correction removes the proportional lit contribution of each layer in shadow areas.
+//
+// Decal UV: same algorithm as lilCalcDecalUV.
+//   Position (PosX/PosY) = decal center in UV space (0.5,0.5 = mesh UV center).
+//   Size (SizeX/SizeY)   = fraction of UV space covered (1.0 = full UV width/height).
+//   Tiling = 1/Size,  Offset = 0.5 - Pos * Tiling
+//   Rotation is around mesh UV center (0.5,0.5), same as lilRotateUV.
+//
+// _CustomDecalMaskTex is sampled in DECAL UV SPACE (same transform as the decal texture).
+//   This means the mask scales, moves, and rotates together with the decal.
+//   It controls the precise shape of the effect within the placed decal area.
+//   _dnkw_decalMask (bounds * maskTex.r) is stored for reuse in BEFORE_RIMLIGHT (Matcap).
+//
+// BlendMode: 0=Replace, 1=Add, 2=Screen, 3=Multiply.
+#define BEFORE_MATCAP \
+    { \
+        float  _mc_sinv  = 1.0 - fd.shadowmix; \
+        float3 _mc_ratio = fd.col.rgb / max(fd.albedo, float3(0.001, 0.001, 0.001)); \
+        if (_CustomMain2ndShadowDisable > 0.001) { \
+            float3 _mc_d2 = _dnkw_pre3rd - _dnkw_pre2nd; \
+            fd.col.rgb -= saturate(_mc_d2) * _mc_ratio * (_mc_sinv * _CustomMain2ndShadowDisable); \
         } \
+        if (_CustomMain3rdShadowDisable > 0.001) { \
+            float3 _mc_d3 = fd.albedo - _dnkw_pre3rd; \
+            fd.col.rgb -= saturate(_mc_d3) * _mc_ratio * (_mc_sinv * _CustomMain3rdShadowDisable); \
+        } \
+        fd.col.rgb = max(fd.col.rgb, 0.0); \
+    } \
+    /* Compute decal UV once; result shared with BEFORE_RIMLIGHT via _dnkw_decalMask. */ \
+    float _dnkw_decalMask = 0.0; \
+    float2 _dnkw_decalUV  = float2(0.0, 0.0); \
+    if (_CustomDecalEnabled > 0.5 || _CustomDecalMatcapEnabled > 0.5) { \
+        float2 _dTiling = float2(1.0 / max(_CustomDecalSizeX, 0.0001), \
+                                 1.0 / max(_CustomDecalSizeY, 0.0001)); \
+        float2 _dOffset = 0.5 - float2(_CustomDecalPosX, _CustomDecalPosY) * _dTiling; \
+        float  _dAngle  = _CustomDecalAngle * 0.01745329252; \
+        float  _dSin, _dCos; \
+        sincos(_dAngle, _dSin, _dCos); \
+        float2 _dC = fd.uv0 - 0.5; \
+        float2 _dRotUV = float2(_dC.x * _dCos - _dC.y * _dSin + 0.5, \
+                                _dC.x * _dSin + _dC.y * _dCos + 0.5); \
+        _dnkw_decalUV  = _dRotUV * _dTiling + _dOffset; \
+        float  _dInBounds = step(0.0, _dnkw_decalUV.x) * step(_dnkw_decalUV.x, 1.0) \
+                          * step(0.0, _dnkw_decalUV.y) * step(_dnkw_decalUV.y, 1.0); \
+        /* Mask sampled in decal UV space → scales/moves/rotates with the decal. */ \
+        float  _dMaskTex  = LIL_SAMPLE_2D(_CustomDecalMaskTex, sampler_linear_repeat, _dnkw_decalUV).r; \
+        _dnkw_decalMask   = _dInBounds * _dMaskTex; \
+    } \
+    if (_CustomDecalEnabled > 0.5) { \
+        float4 _dTex    = LIL_SAMPLE_2D(_CustomDecalTex, sampler_linear_repeat, _dnkw_decalUV); \
+        float  _dShadow = lerp(1.0, fd.shadowmix, _CustomDecalShadowDisable); \
+        float  _dAlpha  = _dTex.a * _CustomDecalAlpha * _dnkw_decalMask * _dShadow; \
+        float3 _dColor  = _dTex.rgb * _CustomDecalColor.rgb; \
+        fd.col.rgb = DNKW_DecalBlend(fd.col.rgb, _dColor, _dAlpha, _CustomDecalBlendMode); \
+    }
+
+// BEFORE_RIMLIGHT - Decal Matcap
+// Matcap UV is view-space; the placement mask is _dnkw_decalMask computed in BEFORE_MATCAP.
+// Both base and matcap share the same positioned/scaled/rotated decal mask.
+#define BEFORE_RIMLIGHT \
+    if (_CustomDecalMatcapEnabled > 0.5) { \
+        float3 _mcNVS    = mul((float3x3)UNITY_MATRIX_V, fd.N); \
+        float2 _mcUV     = _mcNVS.xy * 0.5 + 0.5; \
+        float4 _mcTex    = LIL_SAMPLE_2D(_CustomDecalMatcapTex, sampler_linear_repeat, _mcUV); \
+        float  _mcShadow = lerp(1.0, fd.shadowmix, _CustomDecalMatcapShadowDisable); \
+        float3 _mcColor  = _mcTex.rgb * _CustomDecalMatcapColor.rgb; \
+        float  _mcAlpha  = _mcTex.a * _CustomDecalMatcapAlpha * _dnkw_decalMask * _mcShadow; \
+        fd.col.rgb = DNKW_DecalBlend(fd.col.rgb, _mcColor, _mcAlpha, _CustomDecalMatcapBlendMode); \
     }
 
 // BEFORE_EMISSION_1ST - 2nd Rim (Applied after standard rim light processing)

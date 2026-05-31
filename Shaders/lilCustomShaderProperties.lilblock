@@ -29,17 +29,6 @@
         _CustomRim2ndBlur ("Rim 2nd Blur", Range(0, 1)) = 1
 
         //----------------------------------------------------------------------------------------------------------------------
-        // Matcap 3rd
-        [HideInInspector] _CustomMatcap3rdUIEnabled ("Enable Matcap 3rd", Float) = 0
-        _CustomMatcap3rdEnabled ("Enable Matcap 3rd", Float) = 0
-        _CustomMatcap3rdTex ("Matcap 3rd Texture", 2D) = "black" {}
-        _CustomMatcap3rdMaskTex ("Matcap 3rd Mask", 2D) = "white" {}
-        _CustomMatcap3rdColor ("Matcap 3rd Color", Color) = (1, 1, 1, 1)
-        _CustomMatcap3rdStrength ("Matcap 3rd Strength", Range(0, 1)) = 1
-        _CustomMatcap3rdBlendMode ("Matcap 3rd Blend Mode", Float) = 0
-        _CustomMatcap3rdShadowAttenuation ("Matcap 3rd Shadow Attenuation", Range(0, 1)) = 0
-
-        //----------------------------------------------------------------------------------------------------------------------
         // Normal Map 3rd
         [HideInInspector] _CustomNormal3rdUIEnabled ("Enable Normal Map 3rd", Float) = 0
         _CustomNormal3rdEnabled ("Enable Normal Map 3rd", Float) = 0
@@ -48,9 +37,34 @@
         _CustomNormal3rdStrength ("Normal Map 3rd Strength", Range(0, 1)) = 0.5
 
         //----------------------------------------------------------------------------------------------------------------------
-        // Normal Map 1st/2nd Ext - Mask for 1st, UV Scroll for 1st and 2nd
+        // Normal Map 1st Ext - Mask
         _CustomBump1stMaskTex  ("Normal 1st Mask", 2D) = "white" {}
-        _CustomBump1stScrollU  ("Normal 1st Scroll U", Float) = 0
-        _CustomBump1stScrollV  ("Normal 1st Scroll V", Float) = 0
-        _CustomBump2ndScrollU  ("Normal 2nd Scroll U", Float) = 0
-        _CustomBump2ndScrollV  ("Normal 2nd Scroll V", Float) = 0
+
+        //----------------------------------------------------------------------------------------------------------------------
+        // Main Color 2nd/3rd Shadow Suppress
+        _CustomMain2ndShadowDisable ("Main Color 2nd Shadow Disable", Range(0, 1)) = 0
+        _CustomMain3rdShadowDisable ("Main Color 3rd Shadow Disable", Range(0, 1)) = 0
+
+        //----------------------------------------------------------------------------------------------------------------------
+        // Decal
+        _CustomDecalEnabled ("Enable Decal", Float) = 0
+        [NoScaleOffset] _CustomDecalTex ("Decal Texture", 2D) = "white" {}
+        _CustomDecalPosX ("Decal X Position", Range(0, 1)) = 0.5
+        _CustomDecalPosY ("Decal Y Position", Range(0, 1)) = 0.5
+        _CustomDecalSizeX ("Decal X Size", Float) = 1
+        _CustomDecalSizeY ("Decal Y Size", Float) = 1
+        _CustomDecalAngle ("Decal Angle", Range(-180, 180)) = 0
+        [NoScaleOffset] _CustomDecalMaskTex ("Decal Placement Mask", 2D) = "white" {}
+        _CustomDecalColor ("Decal Color", Color) = (1, 1, 1, 1)
+        _CustomDecalAlpha ("Decal Alpha", Range(0, 1)) = 1
+        _CustomDecalBlendMode ("Decal Blend Mode", Float) = 0
+        _CustomDecalShadowDisable ("Decal Shadow Disable", Range(0, 1)) = 0
+
+        //----------------------------------------------------------------------------------------------------------------------
+        // Decal Matcap
+        _CustomDecalMatcapEnabled ("Enable Decal Matcap", Float) = 0
+        [NoScaleOffset] _CustomDecalMatcapTex ("Decal Matcap Texture", 2D) = "black" {}
+        _CustomDecalMatcapColor ("Decal Matcap Color", Color) = (1, 1, 1, 1)
+        _CustomDecalMatcapAlpha ("Decal Matcap Alpha", Range(0, 1)) = 1
+        _CustomDecalMatcapBlendMode ("Decal Matcap Blend Mode", Float) = 0
+        _CustomDecalMatcapShadowDisable ("Decal Matcap Shadow Disable", Range(0, 1)) = 0

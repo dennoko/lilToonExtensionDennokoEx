@@ -36,16 +36,6 @@ namespace Dennokoworks
         MaterialProperty _CustomRim2ndMainColorStrength;
         MaterialProperty _CustomRim2ndBlur;
 
-        // -- Matcap 3rd --
-        MaterialProperty _CustomMatcap3rdEnabled;
-        MaterialProperty _CustomMatcap3rdUIEnabled;
-        MaterialProperty _CustomMatcap3rdTex;
-        MaterialProperty _CustomMatcap3rdMaskTex;
-        MaterialProperty _CustomMatcap3rdColor;
-        MaterialProperty _CustomMatcap3rdStrength;
-        MaterialProperty _CustomMatcap3rdBlendMode;
-        MaterialProperty _CustomMatcap3rdShadowAttenuation;
-
         // -- Normal Map 3rd --
         MaterialProperty _CustomNormal3rdEnabled;
         MaterialProperty _CustomNormal3rdUIEnabled;
@@ -53,19 +43,42 @@ namespace Dennokoworks
         MaterialProperty _CustomNormal3rdMaskTex;
         MaterialProperty _CustomNormal3rdStrength;
 
-        // -- Normal Map 1st/2nd Ext --
+        // -- Normal Map 1st Ext --
         MaterialProperty _CustomBump1stMaskTex;
-        MaterialProperty _CustomBump1stScrollU;
-        MaterialProperty _CustomBump1stScrollV;
-        MaterialProperty _CustomBump2ndScrollU;
-        MaterialProperty _CustomBump2ndScrollV;
+
+        // -- Main Color 2nd/3rd Shadow Suppress --
+        MaterialProperty _CustomMain2ndShadowDisable;
+        MaterialProperty _CustomMain3rdShadowDisable;
+
+        // -- Decal --
+        MaterialProperty _CustomDecalEnabled;
+        MaterialProperty _CustomDecalTex;
+        MaterialProperty _CustomDecalPosX;
+        MaterialProperty _CustomDecalPosY;
+        MaterialProperty _CustomDecalSizeX;
+        MaterialProperty _CustomDecalSizeY;
+        MaterialProperty _CustomDecalAngle;
+        MaterialProperty _CustomDecalMaskTex;
+        MaterialProperty _CustomDecalColor;
+        MaterialProperty _CustomDecalAlpha;
+        MaterialProperty _CustomDecalBlendMode;
+        MaterialProperty _CustomDecalShadowDisable;
+
+        // -- Decal Matcap --
+        MaterialProperty _CustomDecalMatcapEnabled;
+        MaterialProperty _CustomDecalMatcapTex;
+        MaterialProperty _CustomDecalMatcapColor;
+        MaterialProperty _CustomDecalMatcapAlpha;
+        MaterialProperty _CustomDecalMatcapBlendMode;
+        MaterialProperty _CustomDecalMatcapShadowDisable;
 
         // Foldout states
         static bool _foldRefl2nd      = false;
         static bool _foldRim2nd       = false;
-        static bool _foldMatcap3rd    = false;
         static bool _foldNormal3rd    = false;
         static bool _foldNormalExt    = false;
+        static bool _foldMainShadow   = false;
+        static bool _foldDecal        = false;
 
         // Copy/paste buffer
         static Dictionary<string, float>   _clipFloats   = new Dictionary<string, float>();
@@ -109,15 +122,6 @@ namespace Dennokoworks
             _CustomRim2ndMainColorStrength = FindProperty("_CustomRim2ndMainColorStrength", props, false);
             _CustomRim2ndBlur              = FindProperty("_CustomRim2ndBlur",              props, false);
 
-            _CustomMatcap3rdEnabled       = FindProperty("_CustomMatcap3rdEnabled",       props, false);
-            _CustomMatcap3rdUIEnabled     = FindProperty("_CustomMatcap3rdUIEnabled",     props, false);
-            _CustomMatcap3rdTex           = FindProperty("_CustomMatcap3rdTex",           props, false);
-            _CustomMatcap3rdMaskTex       = FindProperty("_CustomMatcap3rdMaskTex",       props, false);
-            _CustomMatcap3rdColor         = FindProperty("_CustomMatcap3rdColor",         props, false);
-            _CustomMatcap3rdStrength      = FindProperty("_CustomMatcap3rdStrength",      props, false);
-            _CustomMatcap3rdBlendMode     = FindProperty("_CustomMatcap3rdBlendMode",     props, false);
-            _CustomMatcap3rdShadowAttenuation = FindProperty("_CustomMatcap3rdShadowAttenuation", props, false);
-
             _CustomNormal3rdEnabled       = FindProperty("_CustomNormal3rdEnabled",       props, false);
             _CustomNormal3rdUIEnabled     = FindProperty("_CustomNormal3rdUIEnabled",     props, false);
             _CustomNormal3rdTex           = FindProperty("_CustomNormal3rdTex",           props, false);
@@ -125,31 +129,49 @@ namespace Dennokoworks
             _CustomNormal3rdStrength      = FindProperty("_CustomNormal3rdStrength",      props, false);
 
             _CustomBump1stMaskTex         = FindProperty("_CustomBump1stMaskTex",         props, false);
-            _CustomBump1stScrollU         = FindProperty("_CustomBump1stScrollU",         props, false);
-            _CustomBump1stScrollV         = FindProperty("_CustomBump1stScrollV",         props, false);
-            _CustomBump2ndScrollU         = FindProperty("_CustomBump2ndScrollU",         props, false);
-            _CustomBump2ndScrollV         = FindProperty("_CustomBump2ndScrollV",         props, false);
 
-            // Migrate pre-UIEnabled materials: Enabled=1 but UIEnabled not yet set
-            if (_CustomMatcap3rdEnabled?.floatValue > 0.5f && _CustomMatcap3rdUIEnabled?.floatValue < 0.5f)
-                _CustomMatcap3rdUIEnabled.floatValue = 1f;
+            _CustomMain2ndShadowDisable   = FindProperty("_CustomMain2ndShadowDisable",   props, false);
+            _CustomMain3rdShadowDisable   = FindProperty("_CustomMain3rdShadowDisable",   props, false);
+
+            _CustomDecalEnabled           = FindProperty("_CustomDecalEnabled",           props, false);
+            _CustomDecalTex               = FindProperty("_CustomDecalTex",               props, false);
+            _CustomDecalPosX              = FindProperty("_CustomDecalPosX",              props, false);
+            _CustomDecalPosY              = FindProperty("_CustomDecalPosY",              props, false);
+            _CustomDecalSizeX             = FindProperty("_CustomDecalSizeX",             props, false);
+            _CustomDecalSizeY             = FindProperty("_CustomDecalSizeY",             props, false);
+            _CustomDecalAngle             = FindProperty("_CustomDecalAngle",             props, false);
+            _CustomDecalMaskTex           = FindProperty("_CustomDecalMaskTex",           props, false);
+            _CustomDecalColor             = FindProperty("_CustomDecalColor",             props, false);
+            _CustomDecalAlpha             = FindProperty("_CustomDecalAlpha",             props, false);
+            _CustomDecalBlendMode         = FindProperty("_CustomDecalBlendMode",         props, false);
+            _CustomDecalShadowDisable     = FindProperty("_CustomDecalShadowDisable",     props, false);
+
+            _CustomDecalMatcapEnabled     = FindProperty("_CustomDecalMatcapEnabled",     props, false);
+            _CustomDecalMatcapTex         = FindProperty("_CustomDecalMatcapTex",         props, false);
+            _CustomDecalMatcapColor       = FindProperty("_CustomDecalMatcapColor",       props, false);
+            _CustomDecalMatcapAlpha       = FindProperty("_CustomDecalMatcapAlpha",       props, false);
+            _CustomDecalMatcapBlendMode   = FindProperty("_CustomDecalMatcapBlendMode",   props, false);
+            _CustomDecalMatcapShadowDisable = FindProperty("_CustomDecalMatcapShadowDisable", props, false);
+
+            // Migrate pre-UIEnabled materials
             if (_CustomNormal3rdEnabled?.floatValue > 0.5f && _CustomNormal3rdUIEnabled?.floatValue < 0.5f)
                 _CustomNormal3rdUIEnabled.floatValue = 1f;
         }
-        
+
         protected override void DrawCustomProperties(Material material)
         {
             EditorGUILayout.LabelField("DennokoEx", EditorStyles.centeredGreyMiniLabel);
 
             DrawRefl2nd();
             DrawRim2nd();
-            DrawMatcap3rd();
             DrawNormal3rd();
             DrawNormalExt();
+            DrawMainShadow();
+            DrawDecal();
         }
 
         // ========================================================================
-        //  Helper: Toggle in boxOuter style (matches lilToon's ToggleLeft pattern)
+        //  Helpers
         // ========================================================================
         void SyncEffectiveEnabled(MaterialProperty enabledProp, MaterialProperty uiEnabledProp, MaterialProperty texProp)
         {
@@ -179,7 +201,7 @@ namespace Dennokoworks
         }
 
         // ========================================================================
-        //  Copy/Paste section menu (gear icon, same position as lilToon)
+        //  Copy/Paste section menu
         // ========================================================================
         void DrawSectionMenu(MaterialProperty[] props)
         {
@@ -189,7 +211,6 @@ namespace Dennokoworks
 
             if (GUI.Button(rect, EditorGUIUtility.IconContent("_Popup"), new GUIStyle("IconButton")))
             {
-                // Capture array for closure
                 var captured = props;
                 var menu = new GenericMenu();
                 menu.AddItem(new GUIContent(Loc("menu_copy")),          false, () => CopySection(captured, false));
@@ -267,6 +288,10 @@ namespace Dennokoworks
             }
         }
 
+        // ========================================================================
+        //  Sections
+        // ========================================================================
+
         // -- Reflection 2nd --
         void DrawRefl2nd()
         {
@@ -299,7 +324,6 @@ namespace Dennokoworks
                     Prop(_CustomRefl2ndShadowAttenuation, Loc("label_shadow_attenuation"));
                     lilEditorGUI.DrawLine();
 
-                    // Anisotropic mode toggle
                     bool isAniso = _CustomRefl2ndAnisotropic != null && _CustomRefl2ndAnisotropic.floatValue > 0.5f;
                     if (_CustomRefl2ndAnisotropic != null)
                     {
@@ -367,51 +391,6 @@ namespace Dennokoworks
             }
         }
 
-        // -- Matcap 3rd --
-        void DrawMatcap3rd()
-        {
-            SyncEffectiveEnabled(_CustomMatcap3rdEnabled, _CustomMatcap3rdUIEnabled, _CustomMatcap3rdTex);
-            _foldMatcap3rd = Foldout(Loc("foldout_matcap3rd"), _foldMatcap3rd);
-            DrawSectionMenu(new[] {
-                _CustomMatcap3rdEnabled,       _CustomMatcap3rdUIEnabled,
-                _CustomMatcap3rdTex,           _CustomMatcap3rdMaskTex,
-                _CustomMatcap3rdColor,         _CustomMatcap3rdStrength,
-                _CustomMatcap3rdBlendMode,     _CustomMatcap3rdShadowAttenuation,
-            });
-            if (_foldMatcap3rd)
-            {
-                EditorGUILayout.BeginVertical(lilEditorGUI.boxOuter);
-                EditorGUI.BeginChangeCheck();
-                DrawToggle(_CustomMatcap3rdUIEnabled);
-                if (EditorGUI.EndChangeCheck())
-                    SyncEffectiveEnabled(_CustomMatcap3rdEnabled, _CustomMatcap3rdUIEnabled, _CustomMatcap3rdTex);
-                if (_CustomMatcap3rdUIEnabled != null && _CustomMatcap3rdUIEnabled.floatValue > 0.5f)
-                {
-                    EditorGUILayout.BeginVertical(lilEditorGUI.boxInnerHalf);
-                    EditorGUI.BeginChangeCheck();
-                    Prop(_CustomMatcap3rdTex,      Loc("label_texture"));
-                    if (EditorGUI.EndChangeCheck())
-                        SyncEffectiveEnabled(_CustomMatcap3rdEnabled, _CustomMatcap3rdUIEnabled, _CustomMatcap3rdTex);
-                    Prop(_CustomMatcap3rdMaskTex,  Loc("label_mask"));
-                    Prop(_CustomMatcap3rdColor,    Loc("label_color"));
-                    lilEditorGUI.DrawLine();
-                    Prop(_CustomMatcap3rdStrength,          Loc("label_strength"));
-                    Prop(_CustomMatcap3rdShadowAttenuation, Loc("label_shadow_attenuation"));
-                    if (_CustomMatcap3rdBlendMode != null)
-                    {
-                        EditorGUI.BeginChangeCheck();
-                        int mode = EditorGUILayout.Popup(Loc("label_blend_mode"),
-                            (int)_CustomMatcap3rdBlendMode.floatValue,
-                            new[] { Loc("blend_add"), Loc("blend_mul"), Loc("blend_screen") });
-                        if (EditorGUI.EndChangeCheck())
-                            _CustomMatcap3rdBlendMode.floatValue = mode;
-                    }
-                    EditorGUILayout.EndVertical();
-                }
-                EditorGUILayout.EndVertical();
-            }
-        }
-
         // -- Normal Map 3rd --
         void DrawNormal3rd()
         {
@@ -445,35 +424,115 @@ namespace Dennokoworks
             }
         }
 
-        // -- Normal Map 1st/2nd Ext --
+        // -- Normal Map 1st Ext (mask only) --
         void DrawNormalExt()
         {
             _foldNormalExt = Foldout(Loc("foldout_normalext"), _foldNormalExt);
-            DrawSectionMenu(new[] {
-                _CustomBump1stMaskTex,
-                _CustomBump1stScrollU, _CustomBump1stScrollV,
-                _CustomBump2ndScrollU, _CustomBump2ndScrollV,
-            });
+            DrawSectionMenu(new[] { _CustomBump1stMaskTex });
             if (_foldNormalExt)
             {
                 EditorGUILayout.BeginVertical(lilEditorGUI.boxOuter);
                 EditorGUILayout.BeginVertical(lilEditorGUI.boxInnerHalf);
-
                 EditorGUILayout.LabelField(Loc("label_normal1st"), lilEditorGUI.boldLabel);
                 Prop(_CustomBump1stMaskTex, Loc("label_mask"));
-                lilEditorGUI.DrawLine();
-                Prop(_CustomBump1stScrollU, Loc("label_scroll_u"));
-                Prop(_CustomBump1stScrollV, Loc("label_scroll_v"));
-
-                lilEditorGUI.DrawLine();
-
-                EditorGUILayout.LabelField(Loc("label_normal2nd"), lilEditorGUI.boldLabel);
-                Prop(_CustomBump2ndScrollU, Loc("label_scroll_u"));
-                Prop(_CustomBump2ndScrollV, Loc("label_scroll_v"));
-
                 EditorGUILayout.EndVertical();
                 EditorGUILayout.EndVertical();
             }
+        }
+
+        // -- Main Color 2nd/3rd Shadow Suppress --
+        void DrawMainShadow()
+        {
+            _foldMainShadow = Foldout(Loc("foldout_main_shadow"), _foldMainShadow);
+            DrawSectionMenu(new[] { _CustomMain2ndShadowDisable, _CustomMain3rdShadowDisable });
+            if (_foldMainShadow)
+            {
+                EditorGUILayout.BeginVertical(lilEditorGUI.boxOuter);
+                EditorGUILayout.BeginVertical(lilEditorGUI.boxInnerHalf);
+                Prop(_CustomMain2ndShadowDisable, Loc("label_main2nd_shadow_disable"));
+                Prop(_CustomMain3rdShadowDisable, Loc("label_main3rd_shadow_disable"));
+                EditorGUILayout.EndVertical();
+                EditorGUILayout.EndVertical();
+            }
+        }
+
+        // -- Decal --
+        void DrawDecal()
+        {
+            _foldDecal = Foldout(Loc("foldout_decal"), _foldDecal);
+            DrawSectionMenu(new[] {
+                _CustomDecalEnabled,
+                _CustomDecalTex,
+                _CustomDecalPosX,     _CustomDecalPosY,
+                _CustomDecalSizeX,    _CustomDecalSizeY,
+                _CustomDecalAngle,    _CustomDecalMaskTex,
+                _CustomDecalColor,    _CustomDecalAlpha,
+                _CustomDecalBlendMode, _CustomDecalShadowDisable,
+                _CustomDecalMatcapEnabled,
+                _CustomDecalMatcapTex,    _CustomDecalMatcapColor,
+                _CustomDecalMatcapAlpha,  _CustomDecalMatcapBlendMode,
+                _CustomDecalMatcapShadowDisable,
+            });
+            if (!_foldDecal) return;
+
+            // --- Base map ---
+            EditorGUILayout.LabelField(Loc("label_decal_base"), lilEditorGUI.boldLabel);
+            EditorGUILayout.BeginVertical(lilEditorGUI.boxOuter);
+            DrawToggle(_CustomDecalEnabled);
+            if (_CustomDecalEnabled != null && _CustomDecalEnabled.floatValue > 0.5f)
+            {
+                EditorGUILayout.BeginVertical(lilEditorGUI.boxInnerHalf);
+                Prop(_CustomDecalTex, Loc("label_texture"));
+                lilEditorGUI.DrawLine();
+                // Position/Size/Angle layout matching lilToon's decal UI
+                Prop(_CustomDecalPosX,  Loc("label_decal_pos_x"));
+                Prop(_CustomDecalPosY,  Loc("label_decal_pos_y"));
+                Prop(_CustomDecalSizeX, Loc("label_decal_size_x"));
+                Prop(_CustomDecalSizeY, Loc("label_decal_size_y"));
+                Prop(_CustomDecalAngle, Loc("label_decal_angle"));
+                lilEditorGUI.DrawLine();
+                Prop(_CustomDecalMaskTex,       Loc("label_decal_mask"));
+                Prop(_CustomDecalColor,         Loc("label_color"));
+                Prop(_CustomDecalAlpha,         Loc("label_alpha"));
+                Prop(_CustomDecalShadowDisable, Loc("label_shadow_disable"));
+                if (_CustomDecalBlendMode != null)
+                {
+                    EditorGUI.BeginChangeCheck();
+                    int bm = EditorGUILayout.Popup(Loc("label_blend_mode"),
+                        (int)_CustomDecalBlendMode.floatValue,
+                        new[] { Loc("blend_replace"), Loc("blend_add"), Loc("blend_screen"), Loc("blend_mul") });
+                    if (EditorGUI.EndChangeCheck())
+                        _CustomDecalBlendMode.floatValue = bm;
+                }
+                EditorGUILayout.EndVertical();
+            }
+            EditorGUILayout.EndVertical();
+
+            // --- Matcap ---
+            EditorGUILayout.Space(4f);
+            EditorGUILayout.LabelField(Loc("label_decal_matcap"), lilEditorGUI.boldLabel);
+            EditorGUILayout.BeginVertical(lilEditorGUI.boxOuter);
+            DrawToggle(_CustomDecalMatcapEnabled);
+            if (_CustomDecalMatcapEnabled != null && _CustomDecalMatcapEnabled.floatValue > 0.5f)
+            {
+                EditorGUILayout.BeginVertical(lilEditorGUI.boxInnerHalf);
+                Prop(_CustomDecalMatcapTex,   Loc("label_texture"));
+                Prop(_CustomDecalMatcapColor, Loc("label_color"));
+                lilEditorGUI.DrawLine();
+                Prop(_CustomDecalMatcapAlpha,         Loc("label_alpha"));
+                Prop(_CustomDecalMatcapShadowDisable, Loc("label_shadow_disable"));
+                if (_CustomDecalMatcapBlendMode != null)
+                {
+                    EditorGUI.BeginChangeCheck();
+                    int bm = EditorGUILayout.Popup(Loc("label_blend_mode"),
+                        (int)_CustomDecalMatcapBlendMode.floatValue,
+                        new[] { Loc("blend_replace"), Loc("blend_add"), Loc("blend_screen"), Loc("blend_mul") });
+                    if (EditorGUI.EndChangeCheck())
+                        _CustomDecalMatcapBlendMode.floatValue = bm;
+                }
+                EditorGUILayout.EndVertical();
+            }
+            EditorGUILayout.EndVertical();
         }
 
         protected override void ReplaceToCustomShaders()
