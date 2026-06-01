@@ -147,12 +147,16 @@ public class MyPackPlugin : Plugin<MyPackPlugin> {
 
 解決：`[InitializeOnLoad]` のエディタ専用クラスで、**インメモリの `HideAndDontSave` テクスチャ**を焼いて `_CustomMaskPacked` に割り当てる。**ディスクの `.mat` には書き込まない**ので git は汚れない。
 
-自動再ベイクのトリガー：
-- **ドメインリロード時**（`InitializeOnLoad` → 全対象マテリアルを走査。インメモリ品はリロードで破棄されるため毎回再生成）。
-- **`.mat`／画像アセットの再インポート時**（`AssetPostprocessor.OnPostprocessAllAssets` → `delayCall` で再走査）。
+自動再ベイクのトリガー（**安全な2つだけ**に限定する）：
+- **ドメインリロード時に1回**（`InitializeOnLoad` → `EditorApplication.delayCall` → 全対象マテリアルを走査。インメモリ品はリロードで破棄されるため毎回再生成）。
 - **インスペクターでマスク変更時**（`EditorGUI.BeginChangeCheck/EndChangeCheck` で囲み、変更時に対象マテリアルを再ベイク）。
 
+> ⚠️ **`AssetPostprocessor.OnPostprocessAllAssets` で再ベイクしてはいけない（無限ループの罠）**。
+> VRCアップロードはlilToonが `AssetDatabase.Refresh()` を何度も呼び、`.unitypackage` インポートも大量のアセットを再インポートする。これらに反応して `SetTexture`（マテリアル変更）を行うと、それがさらに再インポート/リフレッシュを誘発し、**約0.5秒周期でロードと通常状態が往復し続ける無限ループ**になる（プレビューも完了しない）。プレビュー更新は「リロード後1回」と「インスペクター操作時」に限定し、**インポートには一切反応させない**こと。
+
 無駄焼き防止：各マスクの `Texture.imageContentsHash`（＋InstanceID）から**署名**を作り、署名一致かつプレビュー品が割当済みなら何もしない。これで再描画のたびに焼かない。
+
+実行抑止ガード（必須）：`EditorApplication.isCompiling / isUpdating / isPlayingOrWillChangePlaymode` または `BuildPipeline.isBuildingPlayer` のいずれかが真なら**ベイクを行わずに即return**（再スケジュールもしない＝インポート/ビルド中にスピンしない）。ビルド時の実体反映はNDMF側が担うので、エディタプレビューはビルド中に動く必要がない。
 
 経路の整理：
 
@@ -190,7 +194,7 @@ public class MyPackPlugin : Plugin<MyPackPlugin> {
 4. [ ] 個別スロットは **Properties に残す**（HLSL非サンプリング＝上限非カウント）。パックは `[HideInInspector]` + デフォルト `"white"`。
 5. [ ] **ベイク関数**（ブリット＋ReadPixels、リニア忠実）を1つ実装し、NDMFとエディタプレビューで共有。
 6. [ ] **NDMFプラグイン**（Transformingでクローンに焼く）を optional 依存で実装。
-7. [ ] **エディタプレビュー**（InitializeOnLoad + AssetPostprocessor + インスペクター変更検知 + 署名）を実装。
+7. [ ] **エディタプレビュー**（InitializeOnLoadで1回 + インスペクター変更検知 + 署名）を実装。**AssetPostprocessorでインポートに反応させない**（無限ループ防止）。`isCompiling/isUpdating/isPlaying/isBuildingPlayer` ガードを必ず入れる。
 8. [ ] パック後の全機能ON時テクスチャ数が **64 に十分な余裕**（数枚マージン）を持って収まるか再確認（将来のlilToon更新で増える前提）。
 
 ---

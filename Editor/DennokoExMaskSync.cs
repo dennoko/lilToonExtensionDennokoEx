@@ -10,10 +10,16 @@ namespace Dennokoworks
     //
     // The runtime shader only samples _CustomMaskPacked (the four individual mask slots are no longer
     // sampled, to stay under the 64 texture-parameter limit). At upload the NDMF plugin bakes the
-    // real packed texture onto a cloned material. In the editor, however, nothing would fill
-    // _CustomMaskPacked, so masks would not preview. This class bakes an IN-MEMORY packed texture
-    // (HideAndDontSave) and assigns it for preview only — it never writes to the material on disk,
-    // so .mat files (and git) stay clean. Re-bakes automatically on edit, asset import and reload.
+    // real packed texture onto a cloned material. In the editor, nothing would otherwise fill
+    // _CustomMaskPacked, so masks would not preview. This class bakes an IN-MEMORY texture
+    // (HideAndDontSave) and assigns it for preview only — it never writes to the material on disk.
+    //
+    // IMPORTANT — why this does NOT react to asset imports:
+    // An earlier version re-synced from AssetPostprocessor.OnPostprocessAllAssets. During a VRChat
+    // upload (lilToon calls AssetDatabase.Refresh repeatedly) or a .unitypackage import, that fired
+    // continuously and SetTexture re-triggered more imports — an endless ~0.5s reload loop. So preview
+    // is now driven ONLY by (a) a single scan after each domain reload and (b) inspector edits, and is
+    // suppressed entirely while building / importing / compiling / in play mode.
     [InitializeOnLoad]
     public static class DennokoExMaskSync
     {
@@ -22,15 +28,24 @@ namespace Dennokoworks
 
         static DennokoExMaskSync()
         {
-            // Transient textures are destroyed across domain reloads, so re-bake everything on load.
+            // Transient textures are destroyed across domain reloads, so re-bake once on load.
             EditorApplication.delayCall += SyncAll;
         }
+
+        // Never touch materials while the asset pipeline or a build is busy — that is what caused the
+        // import feedback loop. Preview will catch up on the next reload or inspector interaction.
+        static bool Busy =>
+            EditorApplication.isCompiling ||
+            EditorApplication.isUpdating ||
+            EditorApplication.isPlayingOrWillChangePlaymode ||
+            BuildPipeline.isBuildingPlayer;
 
         public static bool IsDennokoEx(Material m)
             => m != null && m.shader != null && m.shader.name.Contains("dennokoworks/DennokoEx");
 
         public static void SyncAll()
         {
+            if (Busy) return; // do not reschedule — avoids spinning during long imports/builds
             try
             {
                 foreach (var g in AssetDatabase.FindAssets("t:Material"))
@@ -44,6 +59,7 @@ namespace Dennokoworks
 
         public static void Sync(Material m)
         {
+            if (Busy) return;
             if (!IsDennokoEx(m) || !m.HasProperty(DennokoExMaskPacker.PackedProp)) return;
 
             string sig = DennokoExMaskPacker.NeedsPacking(m) ? Signature(m) : "none";
@@ -88,22 +104,6 @@ namespace Dennokoworks
                 sb.Append(';');
             }
             return sb.ToString();
-        }
-
-        // Re-sync when a material or any texture-like asset is (re)imported.
-        class Postprocessor : AssetPostprocessor
-        {
-            static readonly string[] Exts = { ".mat", ".png", ".tga", ".psd", ".jpg", ".jpeg", ".exr", ".tif", ".tiff", ".gif", ".bmp" };
-            static void OnPostprocessAllAssets(string[] imported, string[] deleted, string[] moved, string[] movedFrom)
-            {
-                foreach (var p in imported)
-                    foreach (var e in Exts)
-                        if (p.EndsWith(e, System.StringComparison.OrdinalIgnoreCase))
-                        {
-                            EditorApplication.delayCall += SyncAll;
-                            return;
-                        }
-            }
         }
     }
 }
