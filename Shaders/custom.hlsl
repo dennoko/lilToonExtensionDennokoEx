@@ -73,6 +73,14 @@
 // Add vertex copy
 #define LIL_CUSTOM_VERT_COPY
 
+// Decal mipmap gradient scale.
+// The decal UV magnifies the mesh UV by tiling (= 1/size), so its screen-space
+// derivatives are tiling-times larger than the mesh UV. The GPU then picks a mip
+// level ~log2(tiling) levels too coarse, making the decal go blurry fast.
+// Scaling the gradients by this factor weakens the mipmap response: 1.0 = default
+// automatic mip behavior, 0.1 = ~1/10 strength (sharper, current setting).
+#define DNKW_DECAL_MIP_GRAD_SCALE 0.1
+
 // Blend helper for decal: mode 0=Replace, 1=Add, 2=Screen, 3=Multiply
 // alpha is pre-multiplied into overlay for Add/Screen modes, used as lerp weight for Replace/Multiply
 float3 DNKW_DecalBlend(float3 base, float3 overlay, float alpha, float mode)
@@ -242,6 +250,8 @@ float3 DNKW_DecalBlend(float3 base, float3 overlay, float alpha, float mode)
     /* Compute decal UV once; result shared with BEFORE_RIMLIGHT via _dnkw_decalMask. */ \
     float _dnkw_decalMask = 0.0; \
     float2 _dnkw_decalUV  = float2(0.0, 0.0); \
+    float2 _dnkw_decalDdx = float2(0.0, 0.0); \
+    float2 _dnkw_decalDdy = float2(0.0, 0.0); \
     if (_CustomDecalEnabled > 0.5 || _CustomDecalMatcapEnabled > 0.5) { \
         float2 _dTiling = float2(1.0 / max(_CustomDecalSizeX, 0.0001), \
                                  1.0 / max(_CustomDecalSizeY, 0.0001)); \
@@ -253,14 +263,17 @@ float3 DNKW_DecalBlend(float3 base, float3 overlay, float alpha, float mode)
         float2 _dRotUV = float2(_dC.x * _dCos - _dC.y * _dSin + 0.5, \
                                 _dC.x * _dSin + _dC.y * _dCos + 0.5); \
         _dnkw_decalUV  = _dRotUV * _dTiling + _dOffset; \
+        /* Weaken the tiling-magnified mip response so the decal stays sharp. */ \
+        _dnkw_decalDdx = ddx(_dnkw_decalUV) * DNKW_DECAL_MIP_GRAD_SCALE; \
+        _dnkw_decalDdy = ddy(_dnkw_decalUV) * DNKW_DECAL_MIP_GRAD_SCALE; \
         float  _dInBounds = step(0.0, _dnkw_decalUV.x) * step(_dnkw_decalUV.x, 1.0) \
                           * step(0.0, _dnkw_decalUV.y) * step(_dnkw_decalUV.y, 1.0); \
         /* Mask sampled in decal UV space → scales/moves/rotates with the decal. */ \
-        float  _dMaskTex  = LIL_SAMPLE_2D(_CustomDecalMaskTex, sampler_linear_repeat, _dnkw_decalUV).r; \
+        float  _dMaskTex  = LIL_SAMPLE_2D_GRAD(_CustomDecalMaskTex, sampler_linear_repeat, _dnkw_decalUV, _dnkw_decalDdx, _dnkw_decalDdy).r; \
         _dnkw_decalMask   = _dInBounds * _dMaskTex; \
     } \
     if (_CustomDecalEnabled > 0.5) { \
-        float4 _dTex    = LIL_SAMPLE_2D(_CustomDecalTex, sampler_linear_repeat, _dnkw_decalUV); \
+        float4 _dTex    = LIL_SAMPLE_2D_GRAD(_CustomDecalTex, sampler_linear_repeat, _dnkw_decalUV, _dnkw_decalDdx, _dnkw_decalDdy); \
         float  _dShadow = lerp(1.0, fd.shadowmix, _CustomDecalShadowDisable); \
         float  _dAlpha  = _dTex.a * _CustomDecalAlpha * _dnkw_decalMask * _dShadow; \
         float3 _dColor  = _dTex.rgb * _CustomDecalColor.rgb; \
