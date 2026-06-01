@@ -1,0 +1,27 @@
+{
+    "name": "DennokoEx.NDMF.Editor",
+    "rootNamespace": "",
+    "references": [
+        "DennokoEx.Editor",
+        "nadena.dev.ndmf"
+    ],
+    "includePlatforms": [
+        "Editor"
+    ],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": false,
+    "defineConstraints": [
+        "DENNOKOEX_HAS_NDMF"
+    ],
+    "versionDefines": [
+        {
+            "name": "nadena.dev.ndmf",
+            "expression": "",
+            "define": "DENNOKOEX_HAS_NDMF"
+        }
+    ],
+    "noEngineReferences": false
+}

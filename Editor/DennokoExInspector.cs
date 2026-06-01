@@ -160,7 +160,20 @@ namespace Dennokoworks
 
         protected override void DrawCustomProperties(Material material)
         {
+            // Warn when transparent / cutout mode is active — VRC upload may leave
+            // the shader in an optimized state, causing the material to appear transparent.
+            string sn = material.shader.name;
+            if (sn.Contains("Transparent") || sn.Contains("Cutout"))
+            {
+                EditorGUILayout.HelpBox(Loc("warn_vrc_upload"), MessageType.Warning);
+                if (GUILayout.Button(Loc("btn_refresh_shader")))
+                    EditorApplication.ExecuteMenuItem("Assets/lilToon/[Shader] Refresh shaders");
+                EditorGUILayout.Space(4f);
+            }
+
             EditorGUILayout.LabelField("DennokoEx", EditorStyles.centeredGreyMiniLabel);
+
+            EditorGUI.BeginChangeCheck();
 
             DrawRefl2nd();
             DrawRim2nd();
@@ -168,6 +181,11 @@ namespace Dennokoworks
             DrawNormalExt();
             DrawMainShadow();
             DrawDecal();
+
+            // Rebuild the in-memory packed-mask preview when any mask slot may have changed.
+            if (EditorGUI.EndChangeCheck())
+                foreach (var t in m_MaterialEditor.targets)
+                    if (t is Material mm) DennokoExMaskSync.Sync(mm);
         }
 
         // ========================================================================

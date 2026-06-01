@@ -54,13 +54,18 @@
     float  _CustomDecalMatcapShadowDisable; \
     float  _CustomDecalMatcapEnabled;
 
-// Texture Declarations (use 1 shared sampler to stay within ps_4_0 16-sampler limit)
+// Texture Declarations.
+// Two limits apply: 16 SAMPLERS (ps_4_0) -> solved by sharing sampler_linear_repeat;
+// and 64 TEXTURE PARAMETERS per shader -> the all-features-on build (PostprocessBuild)
+// pushed the transparent pass to 65 and broke it. To stay well under 64 the four
+// single-channel masks are packed into one RGBA texture (_CustomMaskPacked):
+//   R = Reflection 2nd mask   G = Rim 2nd mask   B = Normal 3rd mask   A = Normal 1st mask
+// Each channel is still sampled with its own UV/tiling below, so no feature is lost;
+// only the declared texture COUNT drops (8 -> 5). The individual mask slots remain in the
+// property block for authoring and are baked into _CustomMaskPacked at build time.
 #define LIL_CUSTOM_TEXTURES \
-    TEXTURE2D(_CustomRefl2ndMaskTex); \
-    TEXTURE2D(_CustomRim2ndMaskTex); \
+    TEXTURE2D(_CustomMaskPacked); \
     TEXTURE2D(_CustomNormal3rdTex); \
-    TEXTURE2D(_CustomNormal3rdMaskTex); \
-    TEXTURE2D(_CustomBump1stMaskTex); \
     TEXTURE2D(_CustomDecalTex); \
     TEXTURE2D(_CustomDecalMaskTex); \
     TEXTURE2D(_CustomDecalMatcapTex);
@@ -84,12 +89,12 @@ float3 DNKW_DecalBlend(float3 base, float3 overlay, float alpha, float mode)
 }
 
 // OVERRIDE_NORMAL_1ST - Normal Map 1st with per-pixel scale mask
-// _CustomBump1stMaskTex: per-pixel scale mask (default white = full strength)
+// Scale mask = _CustomMaskPacked.a (authored via the _CustomBump1stMaskTex slot; default white = full strength)
 #define OVERRIDE_NORMAL_1ST \
     if(_UseBumpMap) \
     { \
         float4 _n1Tex  = LIL_SAMPLE_2D_ST(_BumpMap, sampler_MainTex, fd.uvMain); \
-        float  _n1Mask = LIL_SAMPLE_2D(_CustomBump1stMaskTex, sampler_linear_repeat, fd.uvMain).r; \
+        float  _n1Mask = LIL_SAMPLE_2D(_CustomMaskPacked, sampler_linear_repeat, fd.uvMain).a; \
         normalmap      = lilUnpackNormalScale(_n1Tex, _BumpScale * _n1Mask); \
     }
 
@@ -121,7 +126,7 @@ float3 DNKW_DecalBlend(float3 base, float3 overlay, float alpha, float mode)
 #define BEFORE_AUDIOLINK \
     if (_CustomNormal3rdEnabled > 0.5) { \
         float2 _n3UV    = fd.uv0 * _CustomNormal3rdTex_ST.xy + _CustomNormal3rdTex_ST.zw; \
-        float  _n3Mask  = LIL_SAMPLE_2D(_CustomNormal3rdMaskTex, sampler_linear_repeat, fd.uv0).r; \
+        float  _n3Mask  = LIL_SAMPLE_2D(_CustomMaskPacked, sampler_linear_repeat, fd.uv0).b; \
         float4 _n3Raw   = LIL_SAMPLE_2D(_CustomNormal3rdTex, sampler_linear_repeat, _n3UV); \
         float3 _n3NTS; \
         _n3NTS.xy       = _n3Raw.ag * 2.0 - 1.0; \
@@ -145,7 +150,7 @@ float3 DNKW_DecalBlend(float3 base, float3 overlay, float alpha, float mode)
 #define BEFORE_REFLECTION \
     if (_CustomRefl2ndEnabled > 0.5) { \
         float2 _r2MaskUV = fd.uv0 * _CustomRefl2ndMaskTex_ST.xy + _CustomRefl2ndMaskTex_ST.zw; \
-        float  _r2Mask   = LIL_SAMPLE_2D(_CustomRefl2ndMaskTex, sampler_linear_repeat, _r2MaskUV).r; \
+        float  _r2Mask   = LIL_SAMPLE_2D(_CustomMaskPacked, sampler_linear_repeat, _r2MaskUV).r; \
         float  _r2Shadow = lerp(1.0, fd.shadowmix, _CustomRefl2ndShadowAttenuation); \
         float3 _r2Out; \
         if (_CustomRefl2ndAnisotropic > 0.5) { \
@@ -177,7 +182,7 @@ float3 DNKW_DecalBlend(float3 base, float3 overlay, float alpha, float mode)
 #define BEFORE_REFLECTION \
     if (_CustomRefl2ndEnabled > 0.5) { \
         float2 _r2MaskUV    = fd.uv0 * _CustomRefl2ndMaskTex_ST.xy + _CustomRefl2ndMaskTex_ST.zw; \
-        float  _r2Mask      = LIL_SAMPLE_2D(_CustomRefl2ndMaskTex, sampler_linear_repeat, _r2MaskUV).r; \
+        float  _r2Mask      = LIL_SAMPLE_2D(_CustomMaskPacked, sampler_linear_repeat, _r2MaskUV).r; \
         float  _r2Shininess = exp2(_CustomRefl2ndSmoothness * 10.0 + 1.0); \
         float  _r2Shadow    = lerp(1.0, fd.shadowmix, _CustomRefl2ndShadowAttenuation); \
         float3 _r2H         = normalize(fd.L + fd.V); \
@@ -280,7 +285,7 @@ float3 DNKW_DecalBlend(float3 base, float3 overlay, float alpha, float mode)
 // BlendMode: 0=RimLight(Add) / 1=RimShade(Multiply)
 #define BEFORE_EMISSION_1ST \
     if (_CustomRim2ndEnabled > 0.5) { \
-        float  _rim2Mask   = LIL_SAMPLE_2D(_CustomRim2ndMaskTex, sampler_linear_repeat, fd.uv0).r; \
+        float  _rim2Mask   = LIL_SAMPLE_2D(_CustomMaskPacked, sampler_linear_repeat, fd.uv0).g; \
         float  _rim2NdotV  = saturate(dot(fd.N, fd.V)); \
         float  _rim2Val    = pow(1.0 - _rim2NdotV, _CustomRim2ndPower); \
         _rim2Val = lerp(step(0.5, _rim2Val), _rim2Val, _CustomRim2ndBlur); \

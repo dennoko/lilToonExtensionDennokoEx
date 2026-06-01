@@ -40,6 +40,8 @@
   "blend_add": "Add",
   "blend_screen": "Screen",
   "blend_mul": "Multiply",
+  "warn_vrc_upload": "After VRC upload, this material may appear transparent. If so, click the button below to fix the shader.",
+  "btn_refresh_shader": "Fix Shader (Refresh Shader)",
   "menu_copy": "Copy",
   "menu_copy_with_tex": "Copy (with Textures)",
   "menu_paste": "Paste"

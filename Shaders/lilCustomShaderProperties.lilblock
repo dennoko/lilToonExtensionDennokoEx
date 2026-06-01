@@ -1,5 +1,11 @@
 
         //----------------------------------------------------------------------------------------------------------------------
+        // Packed mask (R:Refl2nd G:Rim2nd B:Normal3rd A:Normal1st). Baked from the individual
+        // mask slots below at build time; the only mask texture actually sampled by the shader,
+        // which keeps the total texture-parameter count safely under the GPU's 64 limit.
+        [NoScaleOffset][HideInInspector] _CustomMaskPacked ("Packed Mask", 2D) = "white" {}
+
+        //----------------------------------------------------------------------------------------------------------------------
         // Reflection 2nd
         _CustomRefl2ndEnabled ("Enable Reflection 2nd", Float) = 0
         _CustomRefl2ndMaskTex ("Reflection 2nd Mask", 2D) = "white" {}
