@@ -127,8 +127,9 @@ float3 DNKW_DecalBlend(float3 base, float3 overlay, float alpha, float mode)
     float3 _dnkw_pre3rd = fd.col.rgb;
 
 // BEFORE_AUDIOLINK - 3rd Normal Map (composited after lilToon's normal pipeline)
-// Uses lilBlendNormal-style tangent-space compositing (same as 1st->2nd blend),
-// so strength never overwrites the 1st/2nd result — it additively layers on top.
+// Uses lilUnpackNormalScale + lilBlendNormal, identical to lilToon's 1st->2nd blend,
+// so strength scales the tangent xy without clamping (values >1 amplify, matching 1st/2nd)
+// and additively layers on top of the existing 1st/2nd result.
 // fd.reflectionN/matcapN/matcap2ndN/uvMat are updated here because they were set
 // from the pre-3rd fd.N earlier in the pipeline (lil_pass_forward_normal.hlsl:314-316).
 #define BEFORE_AUDIOLINK \
@@ -136,12 +137,9 @@ float3 DNKW_DecalBlend(float3 base, float3 overlay, float alpha, float mode)
         float2 _n3UV    = fd.uv0 * _CustomNormal3rdTex_ST.xy + _CustomNormal3rdTex_ST.zw; \
         float  _n3Mask  = LIL_SAMPLE_2D(_CustomMaskPacked, sampler_linear_repeat, fd.uv0).b; \
         float4 _n3Raw   = LIL_SAMPLE_2D(_CustomNormal3rdTex, sampler_linear_repeat, _n3UV); \
-        float3 _n3NTS; \
-        _n3NTS.xy       = _n3Raw.ag * 2.0 - 1.0; \
-        _n3NTS.xy      *= saturate(_CustomNormal3rdStrength * _n3Mask); \
-        _n3NTS.z        = sqrt(max(0.0, 1.0 - dot(_n3NTS.xy, _n3NTS.xy))); \
+        float3 _n3NTS   = lilUnpackNormalScale(_n3Raw, _CustomNormal3rdStrength * _n3Mask); \
         float3 _nCurTS  = mul(fd.TBN, fd.N); \
-        float3 _nBlend  = float3(_nCurTS.xy + _n3NTS.xy, _nCurTS.z * _n3NTS.z); \
+        float3 _nBlend  = lilBlendNormal(_nCurTS, _n3NTS); \
         fd.N            = normalize(mul(_nBlend, fd.TBN)); \
         fd.reflectionN  = fd.N; \
         fd.matcapN      = fd.N; \

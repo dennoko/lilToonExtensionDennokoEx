@@ -147,16 +147,18 @@ public class MyPackPlugin : Plugin<MyPackPlugin> {
 
 解決：`[InitializeOnLoad]` のエディタ専用クラスで、**インメモリの `HideAndDontSave` テクスチャ**を焼いて `_CustomMaskPacked` に割り当てる。**ディスクの `.mat` には書き込まない**ので git は汚れない。
 
-自動再ベイクのトリガー（**安全な2つだけ**に限定する）：
-- **ドメインリロード時に1回**（`InitializeOnLoad` → `EditorApplication.delayCall` → 全対象マテリアルを走査。インメモリ品はリロードで破棄されるため毎回再生成）。
-- **インスペクターでマスク変更時**（`EditorGUI.BeginChangeCheck/EndChangeCheck` で囲み、変更時に対象マテリアルを再ベイク）。
+再ベイクの駆動は **`EditorApplication.update` の「アイドル時のみ」** に集約する（ループ耐性＋自己修復）：
+- **(a) ドメインリロード後に1回フル走査**：`InitializeOnLoad` で `_pendingFullSync=true` にし、updateでアイドルになった最初のフレームで全対象マテリアルを走査（インメモリ品はリロードで破棄されるため毎回再生成）。**Busy中は実行せず待つ**ので、リロード直後にインポート中でも取りこぼさない。
+- **(b) スロットル付き自己修復（例:1秒毎）**：アップロード/エクスポート/シェーダー再インポートの後処理で、マテリアルの `_CustomMaskPacked`（インメモリ割当）は **nullに戻される**。これを検知して**外れたものだけ再ベイク**する。「previewしたマテリアル」だけを巡回するので安価。→ **アップロード・エクスポート後に自動でプレビューが復帰する**。
+- **(c) インスペクターでマスク変更時**：`EditorGUI.BeginChangeCheck/EndChangeCheck` で囲み、変更時に対象マテリアルを即再ベイク（1秒待たず即反映）。
+- **(d) ヒエラルキー変更時（プレハブ配置/複製など）**：`EditorApplication.hierarchyChanged` でフラグを立て、アイドル時に**ロード中シーンのレンダラーのマテリアルだけ**を同期（フル走査より安価）。新しく持ち込まれたマテリアルのプレビューを反映する。`SetTexture` はヒエラルキーを変えないので再発火＝ループにならない。
 
 > ⚠️ **`AssetPostprocessor.OnPostprocessAllAssets` で再ベイクしてはいけない（無限ループの罠）**。
-> VRCアップロードはlilToonが `AssetDatabase.Refresh()` を何度も呼び、`.unitypackage` インポートも大量のアセットを再インポートする。これらに反応して `SetTexture`（マテリアル変更）を行うと、それがさらに再インポート/リフレッシュを誘発し、**約0.5秒周期でロードと通常状態が往復し続ける無限ループ**になる（プレビューも完了しない）。プレビュー更新は「リロード後1回」と「インスペクター操作時」に限定し、**インポートには一切反応させない**こと。
+> VRCアップロードはlilToonが `AssetDatabase.Refresh()` を何度も呼び、`.unitypackage` インポートも大量のアセットを再インポートする。これらに反応して `SetTexture`（マテリアル変更）を行うと、それがさらに再インポート/リフレッシュを誘発し、**約0.5秒周期でロードと通常状態が往復し続ける無限ループ**になる（プレビューも完了しない）。アップロード/エクスポート後の復帰は、上記 (b) の**「update＋アイドル時の自己修復」**で実現すること（インポートに反応させない）。`SetTexture` はアセットDBを変更しないので (b) はループしない。
 
-無駄焼き防止：各マスクの `Texture.imageContentsHash`（＋InstanceID）から**署名**を作り、署名一致かつプレビュー品が割当済みなら何もしない。これで再描画のたびに焼かない。
+無駄焼き防止：各マスクの `Texture.imageContentsHash`（＋InstanceID）から**署名**を作り、署名一致かつプレビュー品が割当済みなら何もしない。これで再描画/巡回のたびに焼かない。
 
-実行抑止ガード（必須）：`EditorApplication.isCompiling / isUpdating / isPlayingOrWillChangePlaymode` または `BuildPipeline.isBuildingPlayer` のいずれかが真なら**ベイクを行わずに即return**（再スケジュールもしない＝インポート/ビルド中にスピンしない）。ビルド時の実体反映はNDMF側が担うので、エディタプレビューはビルド中に動く必要がない。
+実行抑止ガード（必須）：`EditorApplication.isCompiling / isUpdating / isPlayingOrWillChangePlaymode` または `BuildPipeline.isBuildingPlayer` のいずれかが真なら**ベイクを行わずに即return**（再スケジュールもしない＝インポート/ビルド中にスピンしない）。ビルド時の実体反映はNDMF側が担うので、エディタプレビューはビルド中に動く必要がない。アイドルに戻れば (a)(b) が自然に復帰させる。
 
 経路の整理：
 
