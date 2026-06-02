@@ -130,6 +130,16 @@ namespace Dennokoworks
             catch (System.Exception e) { Debug.LogException(e); }
         }
 
+        // Manual refresh: drop cached state for the material and re-bake unconditionally.
+        public static void ForceSync(Material m)
+        {
+            if (m == null) return;
+            if (_preview.TryGetValue(m, out var old) && old != null) Object.DestroyImmediate(old);
+            _preview.Remove(m);
+            _sig.Remove(m);
+            Sync(m);
+        }
+
         public static void Sync(Material m)
         {
             if (Busy) return;

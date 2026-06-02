@@ -42,6 +42,7 @@
   "blend_mul": "乗算",
   "warn_vrc_upload": "VRCアップロード後にマテリアルが透明になる場合があります。その場合は下のボタンでシェーダーを修正してください。",
   "btn_refresh_shader": "シェーダーを修正 (Refresh Shader)",
+  "btn_refresh_mask_preview": "マスクプレビューを更新",
   "menu_copy": "コピー",
   "menu_copy_with_tex": "コピー（テクスチャを含む）",
   "menu_paste": "ペースト"

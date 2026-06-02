@@ -173,6 +173,11 @@ namespace Dennokoworks
 
             EditorGUILayout.LabelField("DennokoEx", EditorStyles.centeredGreyMiniLabel);
 
+            // Manual mask-preview refresh (re-bakes the in-memory _CustomMaskPacked for these materials).
+            if (GUILayout.Button(Loc("btn_refresh_mask_preview")))
+                foreach (var t in m_MaterialEditor.targets)
+                    if (t is Material mm) DennokoExMaskSync.ForceSync(mm);
+
             EditorGUI.BeginChangeCheck();
 
             DrawRefl2nd();
