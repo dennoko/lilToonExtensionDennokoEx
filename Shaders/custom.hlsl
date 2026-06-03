@@ -52,6 +52,7 @@
     float  _CustomDecalMatcapAlpha; \
     float  _CustomDecalMatcapBlendMode; \
     float  _CustomDecalMatcapShadowDisable; \
+    float  _CustomDecalMatcapEnableLighting; \
     float  _CustomDecalMatcapEnabled;
 
 // Texture Declarations.
@@ -94,6 +95,23 @@ float3 DNKW_DecalBlend(float3 base, float3 overlay, float alpha, float mode)
     r = lerp(r, mScreen,   step(1.5, mode));
     r = lerp(r, mMultiply, step(2.5, mode));
     return r;
+}
+
+// Matcap lighting correction — mirrors lilToon's lilGetMatCap (_MatCapEnableLighting).
+// Without this the decal matcap renders at constant full brightness and "floats" against
+// the surrounding environment. fd.lightColor is the scene/light color of the current pass.
+// Implemented as a function (not inline in the macro) so the LIL_PASS_FORWARDADD branch can
+// use #if — preprocessor directives are illegal inside an object-like macro body.
+// ForwardBase: lerp toward lightColor by enableLighting (matches lilToon base pass).
+// ForwardAdd : multiply by the additive light color so extra lights don't add the matcap at
+//   full brightness; skipped for Multiply blend (mode 3), same as lilToon's `_MatCapBlendMode < 3`.
+float3 DNKW_MatcapLighting(float3 mc, float3 lightColor, float enableLighting, float blendMode)
+{
+    #if !defined(LIL_PASS_FORWARDADD)
+        return lerp(mc, mc * lightColor, enableLighting);
+    #else
+        return (blendMode < 3) ? mc * lightColor * enableLighting : mc;
+    #endif
 }
 
 // OVERRIDE_NORMAL_1ST - Normal Map 1st with per-pixel scale mask
@@ -288,6 +306,7 @@ float3 DNKW_DecalBlend(float3 base, float3 overlay, float alpha, float mode)
         float4 _mcTex    = LIL_SAMPLE_2D(_CustomDecalMatcapTex, sampler_linear_repeat, _mcUV); \
         float  _mcShadow = lerp(1.0, fd.shadowmix, _CustomDecalMatcapShadowDisable); \
         float3 _mcColor  = _mcTex.rgb * _CustomDecalMatcapColor.rgb; \
+        _mcColor = DNKW_MatcapLighting(_mcColor, fd.lightColor, _CustomDecalMatcapEnableLighting, _CustomDecalMatcapBlendMode); \
         float  _mcAlpha  = _mcTex.a * _CustomDecalMatcapAlpha * _dnkw_decalMask * _mcShadow; \
         fd.col.rgb = DNKW_DecalBlend(fd.col.rgb, _mcColor, _mcAlpha, _CustomDecalMatcapBlendMode); \
     }

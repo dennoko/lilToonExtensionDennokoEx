@@ -14,6 +14,7 @@
   "label_main_color_strength": "メインカラー強度",
   "label_shadow_attenuation": "影減衰",
   "label_shadow_disable": "影部分で無効化",
+  "label_enable_lighting": "ライティング反映",
   "label_anisotropic": "異方性モード (Kajiya-Kay)",
   "label_primary": "プライマリ",
   "label_secondary": "セカンダリ",

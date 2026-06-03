@@ -14,6 +14,7 @@
   "label_main_color_strength": "Main Color Strength",
   "label_shadow_attenuation": "Shadow Attenuation",
   "label_shadow_disable": "Shadow Disable",
+  "label_enable_lighting": "Enable Lighting",
   "label_anisotropic": "Anisotropic Mode (Kajiya-Kay)",
   "label_primary": "Primary",
   "label_secondary": "Secondary",

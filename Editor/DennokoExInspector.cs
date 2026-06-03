@@ -71,6 +71,7 @@ namespace Dennokoworks
         MaterialProperty _CustomDecalMatcapAlpha;
         MaterialProperty _CustomDecalMatcapBlendMode;
         MaterialProperty _CustomDecalMatcapShadowDisable;
+        MaterialProperty _CustomDecalMatcapEnableLighting;
 
         // Foldout states
         static bool _foldRefl2nd      = false;
@@ -152,6 +153,7 @@ namespace Dennokoworks
             _CustomDecalMatcapAlpha       = FindProperty("_CustomDecalMatcapAlpha",       props, false);
             _CustomDecalMatcapBlendMode   = FindProperty("_CustomDecalMatcapBlendMode",   props, false);
             _CustomDecalMatcapShadowDisable = FindProperty("_CustomDecalMatcapShadowDisable", props, false);
+            _CustomDecalMatcapEnableLighting = FindProperty("_CustomDecalMatcapEnableLighting", props, false);
 
             // Migrate pre-UIEnabled materials
             if (_CustomNormal3rdEnabled?.floatValue > 0.5f && _CustomNormal3rdUIEnabled?.floatValue < 0.5f)
@@ -494,7 +496,7 @@ namespace Dennokoworks
                 _CustomDecalMatcapEnabled,
                 _CustomDecalMatcapTex,    _CustomDecalMatcapColor,
                 _CustomDecalMatcapAlpha,  _CustomDecalMatcapBlendMode,
-                _CustomDecalMatcapShadowDisable,
+                _CustomDecalMatcapShadowDisable, _CustomDecalMatcapEnableLighting,
             });
             if (!_foldDecal) return;
 
@@ -542,8 +544,9 @@ namespace Dennokoworks
                 Prop(_CustomDecalMatcapTex,   Loc("label_texture"));
                 Prop(_CustomDecalMatcapColor, Loc("label_color"));
                 lilEditorGUI.DrawLine();
-                Prop(_CustomDecalMatcapAlpha,         Loc("label_alpha"));
-                Prop(_CustomDecalMatcapShadowDisable, Loc("label_shadow_disable"));
+                Prop(_CustomDecalMatcapAlpha,          Loc("label_alpha"));
+                Prop(_CustomDecalMatcapShadowDisable,  Loc("label_shadow_disable"));
+                Prop(_CustomDecalMatcapEnableLighting, Loc("label_enable_lighting"));
                 if (_CustomDecalMatcapBlendMode != null)
                 {
                     EditorGUI.BeginChangeCheck();
