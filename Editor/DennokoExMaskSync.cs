@@ -34,10 +34,22 @@ namespace Dennokoworks
         static readonly Dictionary<Material, Texture2D> _preview = new Dictionary<Material, Texture2D>();
         static readonly Dictionary<Material, string> _sig = new Dictionary<Material, string>();
 
+        // Loop guard. Assigning the preview texture dirties the on-disk material asset; if some other
+        // tool then calls AssetDatabase.SaveAssets() (e.g. a third-party asset post-processor that
+        // re-saves a database on every import), the material is written, re-imported, our preview is
+        // cleared, and self-heal would re-apply it forever — feeding that external import/save loop.
+        // We count how many self-heal passes in a row had to re-apply a material's preview; once that
+        // exceeds the threshold we stop auto-restoring it for a cooldown so DennokoEx never sustains
+        // such a loop. Recovers automatically after the cooldown, on domain reload, or via ForceSync.
+        static readonly Dictionary<Material, int> _healStrikes = new Dictionary<Material, int>();
+        static readonly Dictionary<Material, double> _healMuteUntil = new Dictionary<Material, double>();
+
         static bool _pendingFullSync;
         static bool _pendingSceneSync;
         static double _nextHealTime;
         const double HealInterval = 1.0; // seconds between self-heal passes
+        const int    HealMaxConsecutive = 4;    // consecutive re-clears before we conclude it's a loop
+        const double HealMuteSeconds    = 60.0; // how long to pause auto-restore once a loop is detected
 
         static DennokoExMaskSync()
         {
@@ -90,9 +102,31 @@ namespace Dennokoworks
             foreach (var kv in _preview.ToList())
             {
                 var m = kv.Key;
-                if (m == null) { _preview.Remove(m); continue; }
-                if (m.GetTexture(DennokoExMaskPacker.PackedProp) != kv.Value)
-                    Sync(m); // preview was cleared (e.g. by an upload) -> restore it
+                if (m == null) { _preview.Remove(m); _healStrikes.Remove(m); _healMuteUntil.Remove(m); continue; }
+
+                // Preview still assigned -> healthy. Clear any strike history.
+                if (m.GetTexture(DennokoExMaskPacker.PackedProp) == kv.Value) { _healStrikes.Remove(m); continue; }
+
+                // Preview was cleared (upload / export / reimport). Normally restore it — but if it keeps
+                // getting cleared right after we restore it, an external import/save loop is in progress;
+                // stop feeding it. Paused materials recover after the cooldown or via the manual refresh.
+                if (_healMuteUntil.TryGetValue(m, out var until) && EditorApplication.timeSinceStartup < until)
+                    continue;
+
+                int strikes = _healStrikes.TryGetValue(m, out var s) ? s + 1 : 1;
+                if (strikes >= HealMaxConsecutive)
+                {
+                    _healStrikes.Remove(m);
+                    _healMuteUntil[m] = EditorApplication.timeSinceStartup + HealMuteSeconds;
+                    Debug.LogWarning(
+                        $"[DennokoEx] Mask preview for '{m.name}' kept being cleared by an external asset " +
+                        $"import/save loop, so auto-refresh is paused for {HealMuteSeconds:0}s to avoid feeding it. " +
+                        "Use the material's manual mask-preview refresh button to restore immediately. " +
+                        "(A third-party asset post-processor that re-saves on every import — e.g. SharedTexHub — can cause this.)");
+                    continue;
+                }
+                _healStrikes[m] = strikes;
+                Sync(m); // restore preview
             }
         }
 
@@ -137,6 +171,8 @@ namespace Dennokoworks
             if (_preview.TryGetValue(m, out var old) && old != null) Object.DestroyImmediate(old);
             _preview.Remove(m);
             _sig.Remove(m);
+            _healStrikes.Remove(m);   // manual refresh clears any loop-guard mute
+            _healMuteUntil.Remove(m);
             Sync(m);
         }
 
