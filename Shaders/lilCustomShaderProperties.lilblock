@@ -52,6 +52,15 @@
         _CustomMain3rdShadowDisable ("Main Color 3rd Shadow Disable", Range(0, 1)) = 0
 
         //----------------------------------------------------------------------------------------------------------------------
+        // Main Color 4th
+        _CustomMain4thEnabled ("Enable Main Color 4th", Float) = 0
+        [HDR] _CustomMain4thColor ("Main Color 4th Color", Color) = (1, 1, 1, 1)
+        _CustomMain4thTex ("Main Color 4th Texture", 2D) = "white" {}
+        _CustomMain4thTex_UVMode ("Main Color 4th UV Mode", Float) = 0
+        _CustomMain4thTexBlendMode ("Main Color 4th Blend Mode", Float) = 0
+        _CustomMain4thTexAlphaMode ("Main Color 4th Alpha Mode", Float) = 0
+
+        //----------------------------------------------------------------------------------------------------------------------
         // Decal
         _CustomDecalEnabled ("Enable Decal", Float) = 0
         [NoScaleOffset] _CustomDecalTex ("Decal Texture", 2D) = "white" {}

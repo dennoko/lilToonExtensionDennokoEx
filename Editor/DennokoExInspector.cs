@@ -50,6 +50,14 @@ namespace Dennokoworks
         MaterialProperty _CustomMain2ndShadowDisable;
         MaterialProperty _CustomMain3rdShadowDisable;
 
+        // -- Main Color 4th --
+        MaterialProperty _CustomMain4thEnabled;
+        MaterialProperty _CustomMain4thColor;
+        MaterialProperty _CustomMain4thTex;
+        MaterialProperty _CustomMain4thTex_UVMode;
+        MaterialProperty _CustomMain4thTexBlendMode;
+        MaterialProperty _CustomMain4thTexAlphaMode;
+
         // -- Decal --
         MaterialProperty _CustomDecalEnabled;
         MaterialProperty _CustomDecalTex;
@@ -79,6 +87,7 @@ namespace Dennokoworks
         static bool _foldNormal3rd    = false;
         static bool _foldNormalExt    = false;
         static bool _foldMainShadow   = false;
+        static bool _foldMain4th      = false;
         static bool _foldDecal        = false;
 
         // Copy/paste buffer
@@ -134,6 +143,13 @@ namespace Dennokoworks
             _CustomMain2ndShadowDisable   = FindProperty("_CustomMain2ndShadowDisable",   props, false);
             _CustomMain3rdShadowDisable   = FindProperty("_CustomMain3rdShadowDisable",   props, false);
 
+            _CustomMain4thEnabled         = FindProperty("_CustomMain4thEnabled",         props, false);
+            _CustomMain4thColor           = FindProperty("_CustomMain4thColor",           props, false);
+            _CustomMain4thTex             = FindProperty("_CustomMain4thTex",             props, false);
+            _CustomMain4thTex_UVMode      = FindProperty("_CustomMain4thTex_UVMode",      props, false);
+            _CustomMain4thTexBlendMode    = FindProperty("_CustomMain4thTexBlendMode",    props, false);
+            _CustomMain4thTexAlphaMode    = FindProperty("_CustomMain4thTexAlphaMode",    props, false);
+
             _CustomDecalEnabled           = FindProperty("_CustomDecalEnabled",           props, false);
             _CustomDecalTex               = FindProperty("_CustomDecalTex",               props, false);
             _CustomDecalPosX              = FindProperty("_CustomDecalPosX",              props, false);
@@ -182,6 +198,7 @@ namespace Dennokoworks
 
             EditorGUI.BeginChangeCheck();
 
+            DrawMain4th();
             DrawRefl2nd();
             DrawRim2nd();
             DrawNormal3rd();
@@ -316,6 +333,58 @@ namespace Dennokoworks
         // ========================================================================
         //  Sections
         // ========================================================================
+
+        // -- Main Color 4th --
+        void DrawMain4th()
+        {
+            _foldMain4th = Foldout(Loc("foldout_main4th"), _foldMain4th);
+            DrawSectionMenu(new[] {
+                _CustomMain4thEnabled,        _CustomMain4thColor,
+                _CustomMain4thTex,            _CustomMain4thTex_UVMode,
+                _CustomMain4thTexBlendMode,   _CustomMain4thTexAlphaMode,
+            });
+            if (_foldMain4th)
+            {
+                EditorGUILayout.BeginVertical(lilEditorGUI.boxOuter);
+                DrawToggle(_CustomMain4thEnabled);
+                if (_CustomMain4thEnabled != null && _CustomMain4thEnabled.floatValue > 0.5f)
+                {
+                    EditorGUILayout.BeginVertical(lilEditorGUI.boxInnerHalf);
+                    Prop(_CustomMain4thColor, Loc("label_color"));
+                    Prop(_CustomMain4thTex,   Loc("label_texture"));
+                    lilEditorGUI.DrawLine();
+                    if (_CustomMain4thTex_UVMode != null)
+                    {
+                        EditorGUI.BeginChangeCheck();
+                        int uvMode = EditorGUILayout.Popup(Loc("label_uv_mode"),
+                            (int)_CustomMain4thTex_UVMode.floatValue,
+                            new[] { Loc("uv0"), Loc("uv1"), Loc("uv2"), Loc("uv3"), Loc("uv_matcap") });
+                        if (EditorGUI.EndChangeCheck())
+                            _CustomMain4thTex_UVMode.floatValue = uvMode;
+                    }
+                    if (_CustomMain4thTexBlendMode != null)
+                    {
+                        EditorGUI.BeginChangeCheck();
+                        int blend = EditorGUILayout.Popup(Loc("label_blend_mode"),
+                            (int)_CustomMain4thTexBlendMode.floatValue,
+                            new[] { Loc("blend_normal"), Loc("blend_add"), Loc("blend_screen"), Loc("blend_mul") });
+                        if (EditorGUI.EndChangeCheck())
+                            _CustomMain4thTexBlendMode.floatValue = blend;
+                    }
+                    if (_CustomMain4thTexAlphaMode != null)
+                    {
+                        EditorGUI.BeginChangeCheck();
+                        int alpha = EditorGUILayout.Popup(Loc("label_alpha_mode"),
+                            (int)_CustomMain4thTexAlphaMode.floatValue,
+                            new[] { Loc("alpha_off"), Loc("alpha_replace"), Loc("alpha_mul"), Loc("alpha_add"), Loc("alpha_sub") });
+                        if (EditorGUI.EndChangeCheck())
+                            _CustomMain4thTexAlphaMode.floatValue = alpha;
+                    }
+                    EditorGUILayout.EndVertical();
+                }
+                EditorGUILayout.EndVertical();
+            }
+        }
 
         // -- Reflection 2nd --
         void DrawRefl2nd()

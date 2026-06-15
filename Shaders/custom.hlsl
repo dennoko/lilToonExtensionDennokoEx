@@ -38,6 +38,12 @@
     float  _CustomRim2ndBlur; \
     float  _CustomMain2ndShadowDisable; \
     float  _CustomMain3rdShadowDisable; \
+    float4 _CustomMain4thColor; \
+    float4 _CustomMain4thTex_ST; \
+    float  _CustomMain4thTex_UVMode; \
+    float  _CustomMain4thTexBlendMode; \
+    float  _CustomMain4thTexAlphaMode; \
+    float  _CustomMain4thEnabled; \
     float4 _CustomDecalColor; \
     float  _CustomDecalAlpha; \
     float  _CustomDecalBlendMode; \
@@ -69,7 +75,8 @@
     TEXTURE2D(_CustomNormal3rdTex); \
     TEXTURE2D(_CustomDecalTex); \
     TEXTURE2D(_CustomDecalMaskTex); \
-    TEXTURE2D(_CustomDecalMatcapTex);
+    TEXTURE2D(_CustomDecalMatcapTex); \
+    TEXTURE2D(_CustomMain4thTex);
 
 // Add vertex copy
 #define LIL_CUSTOM_VERT_COPY
@@ -143,6 +150,34 @@ float3 DNKW_MatcapLighting(float3 mc, float3 lightColor, float enableLighting, f
 
 #define BEFORE_MAIN3RD \
     float3 _dnkw_pre3rd = fd.col.rgb;
+
+// BEFORE_SHADOW - Main Color 4th (stripped lilGetMain2nd; composited at the main-color
+// stage, i.e. before lighting, so it is lit exactly like lilToon's Main 2nd/3rd).
+// Omitted vs lilToon: MSDF / scroll / rotation / distance fade / dissolve / blend mask.
+// Kept: HDR color, texture (tiling/offset), UV channel select (0-3 + MatCap),
+//       blend mode (lilBlendColor: 0=Normal,1=Add,2=Screen,3=Multiply),
+//       alpha mode (0=Off,1=Replace,2=Multiply,3=Add,4=Subtract).
+// AlphaMode writes fd.col.a unconditionally: lilToon guards it with #if LIL_RENDER!=0,
+// but #if is illegal inside a macro body. In opaque passes fd.col.a is unused at output
+// and cutout clipping already happened earlier, so the write is harmless there.
+#define BEFORE_SHADOW \
+    if (_CustomMain4thEnabled > 0.5) { \
+        float2 _m4UV = fd.uv0; \
+        if(_CustomMain4thTex_UVMode == 1) _m4UV = fd.uv1; \
+        if(_CustomMain4thTex_UVMode == 2) _m4UV = fd.uv2; \
+        if(_CustomMain4thTex_UVMode == 3) _m4UV = fd.uv3; \
+        if(_CustomMain4thTex_UVMode == 4) _m4UV = fd.uvMat; \
+        _m4UV = _m4UV * _CustomMain4thTex_ST.xy + _CustomMain4thTex_ST.zw; \
+        float4 _m4col = _CustomMain4thColor * LIL_SAMPLE_2D(_CustomMain4thTex, sampler_linear_repeat, _m4UV); \
+        if(_CustomMain4thTexAlphaMode != 0) { \
+            if(_CustomMain4thTexAlphaMode == 1) fd.col.a = _m4col.a; \
+            if(_CustomMain4thTexAlphaMode == 2) fd.col.a = fd.col.a * _m4col.a; \
+            if(_CustomMain4thTexAlphaMode == 3) fd.col.a = saturate(fd.col.a + _m4col.a); \
+            if(_CustomMain4thTexAlphaMode == 4) fd.col.a = saturate(fd.col.a - _m4col.a); \
+            _m4col.a = 1; \
+        } \
+        fd.col.rgb = lilBlendColor(fd.col.rgb, _m4col.rgb, _m4col.a, _CustomMain4thTexBlendMode); \
+    }
 
 // BEFORE_AUDIOLINK - 3rd Normal Map (composited after lilToon's normal pipeline)
 // Uses lilUnpackNormalScale + lilBlendNormal, identical to lilToon's 1st->2nd blend,
