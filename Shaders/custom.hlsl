@@ -203,33 +203,10 @@ float3 DNKW_MatcapLighting(float3 mc, float3 lightColor, float enableLighting, f
         fd.col.rgb += _r2Out * lerp(float3(1.0, 1.0, 1.0), fd.albedo, _CustomRefl2ndMainColorStrength); \
     }
 #else
-#define BEFORE_REFLECTION \
-    if (_CustomRefl2ndEnabled > 0.5) { \
-        float2 _r2MaskUV    = fd.uv0 * _CustomRefl2ndMaskTex_ST.xy + _CustomRefl2ndMaskTex_ST.zw; \
-        float  _r2Mask      = LIL_SAMPLE_2D(_CustomMaskPacked, sampler_linear_repeat, _r2MaskUV).r; \
-        float  _r2Shininess = exp2(_CustomRefl2ndSmoothness * 10.0 + 1.0); \
-        float  _r2Shadow    = lerp(1.0, fd.shadowmix, _CustomRefl2ndShadowAttenuation); \
-        float3 _r2H         = normalize(fd.L + fd.V); \
-        float3 _r2Out; \
-        if (_CustomRefl2ndAnisotropic > 0.5) { \
-            float  _r2HalfShin = _r2Shininess * 0.5; \
-            float3 _r2T1    = normalize(fd.TBN[1] + fd.N * _CustomRefl2ndAnisoPrimaryShift); \
-            float  _r2TH1   = dot(_r2T1, _r2H); \
-            float  _r2Spec1 = smoothstep(-1.0, 0.0, _r2TH1) * pow(max(0.0, 1.0 - _r2TH1 * _r2TH1), _r2HalfShin); \
-            float3 _r2T2    = normalize(fd.TBN[1] + fd.N * _CustomRefl2ndAnisoSecondaryShift); \
-            float  _r2TH2   = dot(_r2T2, _r2H); \
-            float  _r2Spec2 = smoothstep(-1.0, 0.0, _r2TH2) * pow(max(0.0, 1.0 - _r2TH2 * _r2TH2), _r2HalfShin * 0.5); \
-            _r2Spec1 = lerp(step(0.5, _r2Spec1), _r2Spec1, _CustomRefl2ndBlur); \
-            _r2Spec2 = lerp(step(0.5, _r2Spec2), _r2Spec2, _CustomRefl2ndBlur); \
-            _r2Out = (_CustomRefl2ndColor.rgb * _r2Spec1 + _CustomRefl2ndAnisoSecondaryColor.rgb * _r2Spec2 * _CustomRefl2ndAnisoSecondaryStrength) * _CustomRefl2ndStrength * _r2Mask * _r2Shadow * fd.lightColor; \
-        } else { \
-            float  _r2NdotH = saturate(dot(fd.N, _r2H)); \
-            float  _r2Spec  = pow(_r2NdotH, _r2Shininess); \
-            _r2Spec = lerp(step(0.5, _r2Spec), _r2Spec, _CustomRefl2ndBlur); \
-            _r2Out = _CustomRefl2ndColor.rgb * _r2Spec * _CustomRefl2ndStrength * _r2Mask * _r2Shadow * fd.lightColor; \
-        } \
-        fd.col.rgb += _r2Out * lerp(float3(1.0, 1.0, 1.0), fd.albedo, _CustomRefl2ndMainColorStrength); \
-    }
+// VRCLV is unavailable only in extreme legacy environments where neither the
+// red.sim package nor lilToon's bundled LightVolumes.cginc exists. Disable the
+// reflection rather than fall back, so undefined LightVolume* calls never compile.
+#define BEFORE_REFLECTION
 #endif
 
 // BEFORE_MATCAP - Main 2nd/3rd shadow suppress + Decal UV setup + Decal base map
