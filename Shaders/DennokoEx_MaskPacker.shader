@@ -1,6 +1,6 @@
 // Editor-only blit shader used by DennokoEx's build-time mask packer.
 // Composites four single-channel masks into one RGBA texture (each mask -> .r of its source):
-//   R = Reflection 2nd   G = Rim 2nd   B = Normal 3rd   A = Normal 1st
+//   R = Reflection 2nd   G = Rim 2nd   B = Normal 3rd   A = Main Color 4th
 // Sampling honours each source's import settings (sRGB/linear) exactly as the runtime shader
 // did before packing, and the result is written to a linear render target, so values are faithful.
 Shader "Hidden/dennokoworks/DennokoEx/MaskPacker"

@@ -36,13 +36,12 @@
     float4 _CustomRefl2ndMaskTex_ST; \
     float  _CustomRim2ndMainColorStrength; \
     float  _CustomRim2ndBlur; \
-    float  _CustomMain2ndShadowDisable; \
-    float  _CustomMain3rdShadowDisable; \
     float4 _CustomMain4thColor; \
     float4 _CustomMain4thTex_ST; \
     float  _CustomMain4thTex_UVMode; \
     float  _CustomMain4thTexBlendMode; \
     float  _CustomMain4thTexAlphaMode; \
+    float  _CustomMain4thShadowDisable; \
     float  _CustomMain4thEnabled; \
     float4 _CustomDecalColor; \
     float  _CustomDecalAlpha; \
@@ -66,9 +65,9 @@
 // and 64 TEXTURE PARAMETERS per shader -> the all-features-on build (PostprocessBuild)
 // pushed the transparent pass to 65 and broke it. To stay well under 64 the four
 // single-channel masks are packed into one RGBA texture (_CustomMaskPacked):
-//   R = Reflection 2nd mask   G = Rim 2nd mask   B = Normal 3rd mask   A = Normal 1st mask
-// Each channel is still sampled with its own UV/tiling below, so no feature is lost;
-// only the declared texture COUNT drops (8 -> 5). The individual mask slots remain in the
+//   R = Reflection 2nd mask   G = Rim 2nd mask   B = Normal 3rd mask   A = Main Color 4th mask
+// Each channel is still sampled with its own UV below, so no feature is lost;
+// only the declared texture COUNT drops. The individual mask slots remain in the
 // property block for authoring and are baked into _CustomMaskPacked at build time.
 #define LIL_CUSTOM_TEXTURES \
     TEXTURE2D(_CustomMaskPacked); \
@@ -121,16 +120,6 @@ float3 DNKW_MatcapLighting(float3 mc, float3 lightColor, float enableLighting, f
     #endif
 }
 
-// OVERRIDE_NORMAL_1ST - Normal Map 1st with per-pixel scale mask
-// Scale mask = _CustomMaskPacked.a (authored via the _CustomBump1stMaskTex slot; default white = full strength)
-#define OVERRIDE_NORMAL_1ST \
-    if(_UseBumpMap) \
-    { \
-        float4 _n1Tex  = LIL_SAMPLE_2D_ST(_BumpMap, sampler_MainTex, fd.uvMain); \
-        float  _n1Mask = LIL_SAMPLE_2D(_CustomMaskPacked, sampler_linear_repeat, fd.uvMain).a; \
-        normalmap      = lilUnpackNormalScale(_n1Tex, _BumpScale * _n1Mask); \
-    }
-
 // OVERRIDE_NORMAL_2ND - Normal Map 2nd preserving UVMode and blend
 #define OVERRIDE_NORMAL_2ND \
     if(_UseBump2ndMap) \
@@ -144,39 +133,53 @@ float3 DNKW_MatcapLighting(float3 mc, float3 lightColor, float enableLighting, f
         normalmap       = lilBlendNormal(normalmap, lilUnpackNormalScale(_n2Tex, _n2Scale)); \
     }
 
-// BEFORE_MAIN2ND / BEFORE_MAIN3RD - save pre-layer colors for shadow suppress correction
-#define BEFORE_MAIN2ND \
-    float3 _dnkw_pre2nd = fd.col.rgb;
-
-#define BEFORE_MAIN3RD \
-    float3 _dnkw_pre3rd = fd.col.rgb;
+// BEFORE_MAIN - declare the Main 4th shadow-disable carry variable.
+// It is declared here (the earliest hook, present in every forward/meta pass) rather than in
+// BEFORE_SHADOW because some passes expand the consumer (BEFORE_EMISSION_1ST) but NOT
+// BEFORE_SHADOW (e.g. Gem, Meta). Declaring at BEFORE_MAIN guarantees the variable exists in
+// every pass that references it; passes without BEFORE_SHADOW simply leave it at 0 (no-op).
+#define BEFORE_MAIN \
+    float3 _dnkw_main4thDelta = float3(0.0, 0.0, 0.0);
 
 // BEFORE_SHADOW - Main Color 4th (stripped lilGetMain2nd; composited at the main-color
 // stage, i.e. before lighting, so it is lit exactly like lilToon's Main 2nd/3rd).
-// Omitted vs lilToon: MSDF / scroll / rotation / distance fade / dissolve / blend mask.
+// Omitted vs lilToon: MSDF / scroll / rotation / distance fade / dissolve.
 // Kept: HDR color, texture (tiling/offset), UV channel select (0-3 + MatCap),
 //       blend mode (lilBlendColor: 0=Normal,1=Add,2=Screen,3=Multiply),
 //       alpha mode (0=Off,1=Replace,2=Multiply,3=Add,4=Subtract).
+//
+// Mask: the draw range is gated by an INDEPENDENT mask texture authored via the
+// _CustomMain4thMaskTex slot and baked into _CustomMaskPacked.a (sampled at fd.uv0, mesh UV).
+// The blend weight is mask * _CustomMain4thColor.a; the main texture's own alpha is NOT used
+// as the range. Default packed mask is white (.a = 1) so an unmasked layer covers fully.
+//
 // AlphaMode writes fd.col.a unconditionally: lilToon guards it with #if LIL_RENDER!=0,
 // but #if is illegal inside a macro body. In opaque passes fd.col.a is unused at output
 // and cutout clipping already happened earlier, so the write is harmless there.
+//
+// Shadow Disable: fd.shadowmix is not yet computed at this hook, so the albedo-space
+// contribution of Main 4th is captured into _dnkw_main4thDelta (declared at BEFORE_MAIN) and
+// the shadow correction is applied later at BEFORE_EMISSION_1ST (where shadowmix is available).
 #define BEFORE_SHADOW \
     if (_CustomMain4thEnabled > 0.5) { \
-        float2 _m4UV = fd.uv0; \
+        float3 _m4Pre = fd.col.rgb; \
+        float2 _m4UV  = fd.uv0; \
         if(_CustomMain4thTex_UVMode == 1) _m4UV = fd.uv1; \
         if(_CustomMain4thTex_UVMode == 2) _m4UV = fd.uv2; \
         if(_CustomMain4thTex_UVMode == 3) _m4UV = fd.uv3; \
         if(_CustomMain4thTex_UVMode == 4) _m4UV = fd.uvMat; \
         _m4UV = _m4UV * _CustomMain4thTex_ST.xy + _CustomMain4thTex_ST.zw; \
-        float4 _m4col = _CustomMain4thColor * LIL_SAMPLE_2D(_CustomMain4thTex, sampler_linear_repeat, _m4UV); \
+        float3 _m4rgb  = _CustomMain4thColor.rgb * LIL_SAMPLE_2D(_CustomMain4thTex, sampler_linear_repeat, _m4UV).rgb; \
+        float  _m4Mask = LIL_SAMPLE_2D(_CustomMaskPacked, sampler_linear_repeat, fd.uv0).a; \
+        float  _m4a    = _CustomMain4thColor.a * _m4Mask; \
         if(_CustomMain4thTexAlphaMode != 0) { \
-            if(_CustomMain4thTexAlphaMode == 1) fd.col.a = _m4col.a; \
-            if(_CustomMain4thTexAlphaMode == 2) fd.col.a = fd.col.a * _m4col.a; \
-            if(_CustomMain4thTexAlphaMode == 3) fd.col.a = saturate(fd.col.a + _m4col.a); \
-            if(_CustomMain4thTexAlphaMode == 4) fd.col.a = saturate(fd.col.a - _m4col.a); \
-            _m4col.a = 1; \
+            if(_CustomMain4thTexAlphaMode == 1) fd.col.a = _m4a; \
+            if(_CustomMain4thTexAlphaMode == 2) fd.col.a = fd.col.a * _m4a; \
+            if(_CustomMain4thTexAlphaMode == 3) fd.col.a = saturate(fd.col.a + _m4a); \
+            if(_CustomMain4thTexAlphaMode == 4) fd.col.a = saturate(fd.col.a - _m4a); \
         } \
-        fd.col.rgb = lilBlendColor(fd.col.rgb, _m4col.rgb, _m4col.a, _CustomMain4thTexBlendMode); \
+        fd.col.rgb = lilBlendColor(fd.col.rgb, _m4rgb, _m4a, _CustomMain4thTexBlendMode); \
+        _dnkw_main4thDelta = fd.col.rgb - _m4Pre; \
     }
 
 // BEFORE_AUDIOLINK - 3rd Normal Map (composited after lilToon's normal pipeline)
@@ -244,11 +247,7 @@ float3 DNKW_MatcapLighting(float3 mc, float3 lightColor, float enableLighting, f
 #define BEFORE_REFLECTION
 #endif
 
-// BEFORE_MATCAP - Main 2nd/3rd shadow suppress + Decal UV setup + Decal base map
-//
-// Shadow suppress: at this hook fd.shadowmix is available and fd.albedo is the full
-// pre-lighting unlit color. _dnkw_pre2nd/_dnkw_pre3rd were captured at BEFORE_MAIN2ND/3RD.
-// The correction removes the proportional lit contribution of each layer in shadow areas.
+// BEFORE_MATCAP - Decal UV setup + Decal base map
 //
 // Decal UV: same algorithm as lilCalcDecalUV.
 //   Position (PosX/PosY) = decal center in UV space (0.5,0.5 = mesh UV center).
@@ -263,20 +262,6 @@ float3 DNKW_MatcapLighting(float3 mc, float3 lightColor, float enableLighting, f
 //
 // BlendMode: 0=Replace, 1=Add, 2=Screen, 3=Multiply.
 #define BEFORE_MATCAP \
-    /* Skip the per-pixel divide entirely when neither shadow-suppress is in use. */ \
-    if (_CustomMain2ndShadowDisable > 0.001 || _CustomMain3rdShadowDisable > 0.001) { \
-        float  _mc_sinv  = 1.0 - fd.shadowmix; \
-        float3 _mc_ratio = fd.col.rgb / max(fd.albedo, float3(0.001, 0.001, 0.001)); \
-        if (_CustomMain2ndShadowDisable > 0.001) { \
-            float3 _mc_d2 = _dnkw_pre3rd - _dnkw_pre2nd; \
-            fd.col.rgb -= saturate(_mc_d2) * _mc_ratio * (_mc_sinv * _CustomMain2ndShadowDisable); \
-        } \
-        if (_CustomMain3rdShadowDisable > 0.001) { \
-            float3 _mc_d3 = fd.albedo - _dnkw_pre3rd; \
-            fd.col.rgb -= saturate(_mc_d3) * _mc_ratio * (_mc_sinv * _CustomMain3rdShadowDisable); \
-        } \
-        fd.col.rgb = max(fd.col.rgb, 0.0); \
-    } \
     /* Compute decal UV once; result shared with BEFORE_RIMLIGHT via _dnkw_decalMask. */ \
     float _dnkw_decalMask = 0.0; \
     float2 _dnkw_decalUV  = float2(0.0, 0.0); \
@@ -330,9 +315,23 @@ float3 DNKW_MatcapLighting(float3 mc, float3 lightColor, float enableLighting, f
         fd.col.rgb = DNKW_DecalBlend(fd.col.rgb, _mcColor, _mcAlpha, _CustomDecalMatcapBlendMode); \
     }
 
-// BEFORE_EMISSION_1ST - 2nd Rim (Applied after standard rim light processing)
-// BlendMode: 0=RimLight(Add) / 1=RimShade(Multiply)
+// BEFORE_EMISSION_1ST - Main Color 4th shadow disable + 2nd Rim
+//
+// Main 4th shadow disable: removes Main 4th's contribution in shadow areas. The layer's
+// albedo-space contribution (_dnkw_main4thDelta, declared at BEFORE_MAIN and set at
+// BEFORE_SHADOW) is converted to lit space via the lighting ratio (fd.col/fd.albedo) and
+// subtracted scaled by the shadow amount (1 - shadowmix). This hook runs after shadow, so
+// fd.shadowmix is valid. In passes that lack BEFORE_SHADOW (Gem/Meta) the delta stays 0 and
+// this is a no-op. The delta is not saturated so darkening blend modes (Multiply) are also
+// correctly undone in shadow.
+//
+// 2nd Rim: applied after standard rim light. BlendMode: 0=RimLight(Add) / 1=RimShade(Multiply)
 #define BEFORE_EMISSION_1ST \
+    if (_CustomMain4thShadowDisable > 0.001) { \
+        float3 _m4dRatio = fd.col.rgb / max(fd.albedo, float3(0.001, 0.001, 0.001)); \
+        fd.col.rgb -= _dnkw_main4thDelta * _m4dRatio * ((1.0 - fd.shadowmix) * _CustomMain4thShadowDisable); \
+        fd.col.rgb = max(fd.col.rgb, 0.0); \
+    } \
     if (_CustomRim2ndEnabled > 0.5) { \
         float  _rim2Mask   = LIL_SAMPLE_2D(_CustomMaskPacked, sampler_linear_repeat, fd.uv0).g; \
         float  _rim2NdotV  = saturate(dot(fd.N, fd.V)); \

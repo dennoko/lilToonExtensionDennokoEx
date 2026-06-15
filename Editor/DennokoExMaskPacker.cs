@@ -10,7 +10,7 @@ namespace Dennokoworks
     //
     // Channel layout (must match custom.hlsl / DennokoEx_MaskPacker.shader):
     //   R = _CustomRefl2ndMaskTex   G = _CustomRim2ndMaskTex
-    //   B = _CustomNormal3rdMaskTex  A = _CustomBump1stMaskTex
+    //   B = _CustomNormal3rdMaskTex  A = _CustomMain4thMaskTex
     public static class DennokoExMaskPacker
     {
         public const string PackedProp = "_CustomMaskPacked";
@@ -21,7 +21,7 @@ namespace Dennokoworks
             "_CustomRefl2ndMaskTex",   // R
             "_CustomRim2ndMaskTex",    // G
             "_CustomNormal3rdMaskTex", // B
-            "_CustomBump1stMaskTex",   // A
+            "_CustomMain4thMaskTex",   // A
         };
 
         const string PackerShader = "Hidden/dennokoworks/DennokoEx/MaskPacker";

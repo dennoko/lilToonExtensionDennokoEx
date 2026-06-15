@@ -43,22 +43,15 @@
         _CustomNormal3rdStrength ("Normal Map 3rd Strength", Range(0, 1)) = 0.5
 
         //----------------------------------------------------------------------------------------------------------------------
-        // Normal Map 1st Ext - Mask
-        _CustomBump1stMaskTex  ("Normal 1st Mask", 2D) = "white" {}
-
-        //----------------------------------------------------------------------------------------------------------------------
-        // Main Color 2nd/3rd Shadow Suppress
-        _CustomMain2ndShadowDisable ("Main Color 2nd Shadow Disable", Range(0, 1)) = 0
-        _CustomMain3rdShadowDisable ("Main Color 3rd Shadow Disable", Range(0, 1)) = 0
-
-        //----------------------------------------------------------------------------------------------------------------------
         // Main Color 4th
         _CustomMain4thEnabled ("Enable Main Color 4th", Float) = 0
         [HDR] _CustomMain4thColor ("Main Color 4th Color", Color) = (1, 1, 1, 1)
         _CustomMain4thTex ("Main Color 4th Texture", 2D) = "white" {}
+        _CustomMain4thMaskTex ("Main Color 4th Mask", 2D) = "white" {}
         _CustomMain4thTex_UVMode ("Main Color 4th UV Mode", Float) = 0
         _CustomMain4thTexBlendMode ("Main Color 4th Blend Mode", Float) = 0
         _CustomMain4thTexAlphaMode ("Main Color 4th Alpha Mode", Float) = 0
+        _CustomMain4thShadowDisable ("Main Color 4th Shadow Disable", Range(0, 1)) = 0
 
         //----------------------------------------------------------------------------------------------------------------------
         // Decal

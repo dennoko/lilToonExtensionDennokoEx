@@ -43,20 +43,15 @@ namespace Dennokoworks
         MaterialProperty _CustomNormal3rdMaskTex;
         MaterialProperty _CustomNormal3rdStrength;
 
-        // -- Normal Map 1st Ext --
-        MaterialProperty _CustomBump1stMaskTex;
-
-        // -- Main Color 2nd/3rd Shadow Suppress --
-        MaterialProperty _CustomMain2ndShadowDisable;
-        MaterialProperty _CustomMain3rdShadowDisable;
-
         // -- Main Color 4th --
         MaterialProperty _CustomMain4thEnabled;
         MaterialProperty _CustomMain4thColor;
         MaterialProperty _CustomMain4thTex;
+        MaterialProperty _CustomMain4thMaskTex;
         MaterialProperty _CustomMain4thTex_UVMode;
         MaterialProperty _CustomMain4thTexBlendMode;
         MaterialProperty _CustomMain4thTexAlphaMode;
+        MaterialProperty _CustomMain4thShadowDisable;
 
         // -- Decal --
         MaterialProperty _CustomDecalEnabled;
@@ -85,8 +80,6 @@ namespace Dennokoworks
         static bool _foldRefl2nd      = false;
         static bool _foldRim2nd       = false;
         static bool _foldNormal3rd    = false;
-        static bool _foldNormalExt    = false;
-        static bool _foldMainShadow   = false;
         static bool _foldMain4th      = false;
         static bool _foldDecal        = false;
 
@@ -138,17 +131,15 @@ namespace Dennokoworks
             _CustomNormal3rdMaskTex       = FindProperty("_CustomNormal3rdMaskTex",       props, false);
             _CustomNormal3rdStrength      = FindProperty("_CustomNormal3rdStrength",      props, false);
 
-            _CustomBump1stMaskTex         = FindProperty("_CustomBump1stMaskTex",         props, false);
-
-            _CustomMain2ndShadowDisable   = FindProperty("_CustomMain2ndShadowDisable",   props, false);
-            _CustomMain3rdShadowDisable   = FindProperty("_CustomMain3rdShadowDisable",   props, false);
 
             _CustomMain4thEnabled         = FindProperty("_CustomMain4thEnabled",         props, false);
             _CustomMain4thColor           = FindProperty("_CustomMain4thColor",           props, false);
             _CustomMain4thTex             = FindProperty("_CustomMain4thTex",             props, false);
+            _CustomMain4thMaskTex         = FindProperty("_CustomMain4thMaskTex",         props, false);
             _CustomMain4thTex_UVMode      = FindProperty("_CustomMain4thTex_UVMode",      props, false);
             _CustomMain4thTexBlendMode    = FindProperty("_CustomMain4thTexBlendMode",    props, false);
             _CustomMain4thTexAlphaMode    = FindProperty("_CustomMain4thTexAlphaMode",    props, false);
+            _CustomMain4thShadowDisable   = FindProperty("_CustomMain4thShadowDisable",   props, false);
 
             _CustomDecalEnabled           = FindProperty("_CustomDecalEnabled",           props, false);
             _CustomDecalTex               = FindProperty("_CustomDecalTex",               props, false);
@@ -178,8 +169,9 @@ namespace Dennokoworks
 
         protected override void DrawCustomProperties(Material material)
         {
-            // Warn when transparent / cutout mode is active — VRC upload may leave
-            // the shader in an optimized state, causing the material to appear transparent.
+            // 現在の実装のテクスチャサンプリング数であればこのエラーは発生しないと考えられるため、一時的にコメントアウト。
+            // 今後、エラーが発生した場合にボタンを復活させられるよう、実装コードを残しています。
+            /*
             string sn = material.shader.name;
             if (sn.Contains("Transparent") || sn.Contains("Cutout"))
             {
@@ -188,6 +180,7 @@ namespace Dennokoworks
                     EditorApplication.ExecuteMenuItem("Assets/lilToon/[Shader] Refresh shaders");
                 EditorGUILayout.Space(4f);
             }
+            */
 
             EditorGUILayout.LabelField("DennokoEx", EditorStyles.centeredGreyMiniLabel);
 
@@ -202,8 +195,6 @@ namespace Dennokoworks
             DrawRefl2nd();
             DrawRim2nd();
             DrawNormal3rd();
-            DrawNormalExt();
-            DrawMainShadow();
             DrawDecal();
 
             // Rebuild the in-memory packed-mask preview when any mask slot may have changed.
@@ -340,8 +331,9 @@ namespace Dennokoworks
             _foldMain4th = Foldout(Loc("foldout_main4th"), _foldMain4th);
             DrawSectionMenu(new[] {
                 _CustomMain4thEnabled,        _CustomMain4thColor,
-                _CustomMain4thTex,            _CustomMain4thTex_UVMode,
-                _CustomMain4thTexBlendMode,   _CustomMain4thTexAlphaMode,
+                _CustomMain4thTex,            _CustomMain4thMaskTex,
+                _CustomMain4thTex_UVMode,     _CustomMain4thTexBlendMode,
+                _CustomMain4thTexAlphaMode,   _CustomMain4thShadowDisable,
             });
             if (_foldMain4th)
             {
@@ -350,8 +342,9 @@ namespace Dennokoworks
                 if (_CustomMain4thEnabled != null && _CustomMain4thEnabled.floatValue > 0.5f)
                 {
                     EditorGUILayout.BeginVertical(lilEditorGUI.boxInnerHalf);
-                    Prop(_CustomMain4thColor, Loc("label_color"));
-                    Prop(_CustomMain4thTex,   Loc("label_texture"));
+                    Prop(_CustomMain4thColor,   Loc("label_color"));
+                    Prop(_CustomMain4thTex,     Loc("label_texture"));
+                    Prop(_CustomMain4thMaskTex, Loc("label_mask"));
                     lilEditorGUI.DrawLine();
                     if (_CustomMain4thTex_UVMode != null)
                     {
@@ -380,6 +373,8 @@ namespace Dennokoworks
                         if (EditorGUI.EndChangeCheck())
                             _CustomMain4thTexAlphaMode.floatValue = alpha;
                     }
+                    lilEditorGUI.DrawLine();
+                    Prop(_CustomMain4thShadowDisable, Loc("label_shadow_disable"));
                     EditorGUILayout.EndVertical();
                 }
                 EditorGUILayout.EndVertical();
@@ -518,38 +513,6 @@ namespace Dennokoworks
             }
         }
 
-        // -- Normal Map 1st Ext (mask only) --
-        void DrawNormalExt()
-        {
-            _foldNormalExt = Foldout(Loc("foldout_normalext"), _foldNormalExt);
-            DrawSectionMenu(new[] { _CustomBump1stMaskTex });
-            if (_foldNormalExt)
-            {
-                EditorGUILayout.BeginVertical(lilEditorGUI.boxOuter);
-                EditorGUILayout.BeginVertical(lilEditorGUI.boxInnerHalf);
-                EditorGUILayout.LabelField(Loc("label_normal1st"), lilEditorGUI.boldLabel);
-                Prop(_CustomBump1stMaskTex, Loc("label_mask"));
-                EditorGUILayout.EndVertical();
-                EditorGUILayout.EndVertical();
-            }
-        }
-
-        // -- Main Color 2nd/3rd Shadow Suppress --
-        void DrawMainShadow()
-        {
-            _foldMainShadow = Foldout(Loc("foldout_main_shadow"), _foldMainShadow);
-            DrawSectionMenu(new[] { _CustomMain2ndShadowDisable, _CustomMain3rdShadowDisable });
-            if (_foldMainShadow)
-            {
-                EditorGUILayout.BeginVertical(lilEditorGUI.boxOuter);
-                EditorGUILayout.BeginVertical(lilEditorGUI.boxInnerHalf);
-                Prop(_CustomMain2ndShadowDisable, Loc("label_main2nd_shadow_disable"));
-                Prop(_CustomMain3rdShadowDisable, Loc("label_main3rd_shadow_disable"));
-                EditorGUILayout.EndVertical();
-                EditorGUILayout.EndVertical();
-            }
-        }
-
         // -- Decal --
         void DrawDecal()
         {
@@ -660,17 +623,23 @@ namespace Dennokoworks
             ltstessoto  = Shader.Find("Hidden/" + shaderName + "/Tessellation/OnePassTransparentOutline");
             ltstesstto  = Shader.Find("Hidden/" + shaderName + "/Tessellation/TwoPassTransparentOutline");
 
-            ltsl        = Shader.Find(shaderName + "/lilToonLite");
-            ltslc       = Shader.Find("Hidden/" + shaderName + "/Lite/Cutout");
-            ltslt       = Shader.Find("Hidden/" + shaderName + "/Lite/Transparent");
-            ltslot      = Shader.Find("Hidden/" + shaderName + "/Lite/OnePassTransparent");
-            ltsltt      = Shader.Find("Hidden/" + shaderName + "/Lite/TwoPassTransparent");
+            // Lite variants are intentionally NOT shipped by DennokoEx: the extension's purpose is
+            // added expressiveness, not the size/perf reduction Lite targets, and the Lite forward
+            // pass orders the custom hooks differently (MatCap before Shadow) which the extra layers
+            // are not built for. The Lite shaders are deleted, so map every Lite reference to its
+            // full-shader equivalent — if lilToon's render-mode UI ever requests a Lite variant it
+            // silently falls back to the full shader instead of assigning a null (missing) shader.
+            ltsl        = lts;
+            ltslc       = ltsc;
+            ltslt       = ltst;
+            ltslot      = ltsot;
+            ltsltt      = ltstt;
 
-            ltslo       = Shader.Find("Hidden/" + shaderName + "/Lite/OpaqueOutline");
-            ltslco      = Shader.Find("Hidden/" + shaderName + "/Lite/CutoutOutline");
-            ltslto      = Shader.Find("Hidden/" + shaderName + "/Lite/TransparentOutline");
-            ltsloto     = Shader.Find("Hidden/" + shaderName + "/Lite/OnePassTransparentOutline");
-            ltsltto     = Shader.Find("Hidden/" + shaderName + "/Lite/TwoPassTransparentOutline");
+            ltslo       = ltso;
+            ltslco      = ltsco;
+            ltslto      = ltsto;
+            ltsloto     = ltsoto;
+            ltsltto     = ltstto;
 
             ltsref      = Shader.Find("Hidden/" + shaderName + "/Refraction");
             ltsrefb     = Shader.Find("Hidden/" + shaderName + "/RefractionBlur");
@@ -685,8 +654,8 @@ namespace Dennokoworks
 
             ltsover     = Shader.Find(shaderName + "/[Optional] Overlay");
             ltsoover    = Shader.Find(shaderName + "/[Optional] OverlayOnePass");
-            ltslover    = Shader.Find(shaderName + "/[Optional] LiteOverlay");
-            ltsloover   = Shader.Find(shaderName + "/[Optional] LiteOverlayOnePass");
+            ltslover    = ltsover;   // Lite not shipped — fall back to the full overlay shader.
+            ltsloover   = ltsoover;
 
             ltsm        = Shader.Find(shaderName + "/lilToonMulti");
             ltsmo       = Shader.Find("Hidden/" + shaderName + "/MultiOutline");
