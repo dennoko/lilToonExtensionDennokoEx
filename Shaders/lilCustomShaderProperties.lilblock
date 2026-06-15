@@ -20,6 +20,7 @@
         _CustomRefl2ndAnisoSecondaryStrength ("Reflection 2nd Secondary Strength", Range(0, 1)) = 0.5
         _CustomRefl2ndAnisoSecondaryShift ("Reflection 2nd Secondary Shift", Range(-1, 1)) = 0.2
         _CustomRefl2ndShadowAttenuation ("Reflection 2nd Shadow Attenuation", Range(0, 1)) = 0
+        _CustomRefl2ndNormalStrength ("Reflection 2nd Normal Strength", Range(0, 1)) = 1
         _CustomRefl2ndBlur ("Reflection 2nd Blur", Range(0, 1)) = 1
 
         //----------------------------------------------------------------------------------------------------------------------
@@ -32,6 +33,7 @@
         _CustomRim2ndMainColorStrength ("Rim 2nd Main Color Strength", Range(0, 1)) = 0
         _CustomRim2ndBlendMode ("Rim 2nd Blend Mode", Float) = 0
         _CustomRim2ndShadowAttenuation ("Rim 2nd Shadow Attenuation", Range(0, 1)) = 0
+        _CustomRim2ndNormalStrength ("Rim 2nd Normal Strength", Range(0, 1)) = 1
         _CustomRim2ndBlur ("Rim 2nd Blur", Range(0, 1)) = 1
 
         //----------------------------------------------------------------------------------------------------------------------
@@ -77,3 +79,9 @@
         _CustomDecalMatcapBlendMode ("Decal Matcap Blend Mode", Float) = 0
         _CustomDecalMatcapShadowDisable ("Decal Matcap Shadow Disable", Range(0, 1)) = 0
         _CustomDecalMatcapEnableLighting ("Decal Matcap Enable Lighting", Range(0, 1)) = 1
+
+        //----------------------------------------------------------------------------------------------------------------------
+        // Decal Normal Map (placed/scaled/rotated by the Decal base transform, gated by the Decal mask)
+        _CustomDecalNormalEnabled ("Enable Decal Normal Map", Float) = 0
+        _CustomDecalNormalTex ("Decal Normal Map", 2D) = "bump" {}
+        _CustomDecalNormalStrength ("Decal Normal Strength", Range(-2, 2)) = 1

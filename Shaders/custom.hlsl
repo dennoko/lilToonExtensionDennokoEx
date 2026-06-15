@@ -20,12 +20,14 @@
     float  _CustomRefl2ndAnisoSecondaryStrength; \
     float  _CustomRefl2ndAnisoSecondaryShift; \
     float  _CustomRefl2ndShadowAttenuation; \
+    float  _CustomRefl2ndNormalStrength; \
     float  _CustomRefl2ndEnabled; \
     float4 _CustomRim2ndColor; \
     float  _CustomRim2ndPower; \
     float  _CustomRim2ndStrength; \
     float  _CustomRim2ndBlendMode; \
     float  _CustomRim2ndShadowAttenuation; \
+    float  _CustomRim2ndNormalStrength; \
     float  _CustomRim2ndEnabled; \
     float4 _CustomNormal3rdTex_ST; \
     float  _CustomNormal3rdStrength; \
@@ -58,7 +60,10 @@
     float  _CustomDecalMatcapBlendMode; \
     float  _CustomDecalMatcapShadowDisable; \
     float  _CustomDecalMatcapEnableLighting; \
-    float  _CustomDecalMatcapEnabled;
+    float  _CustomDecalMatcapEnabled; \
+    float4 _CustomDecalNormalTex_ST; \
+    float  _CustomDecalNormalStrength; \
+    float  _CustomDecalNormalEnabled;
 
 // Texture Declarations.
 // Two limits apply: 16 SAMPLERS (ps_4_0) -> solved by sharing sampler_linear_repeat;
@@ -75,6 +80,7 @@
     TEXTURE2D(_CustomDecalTex); \
     TEXTURE2D(_CustomDecalMaskTex); \
     TEXTURE2D(_CustomDecalMatcapTex); \
+    TEXTURE2D(_CustomDecalNormalTex); \
     TEXTURE2D(_CustomMain4thTex);
 
 // Add vertex copy
@@ -201,6 +207,40 @@ float3 DNKW_MatcapLighting(float3 mc, float3 lightColor, float enableLighting, f
         fd.matcapN      = fd.N; \
         fd.matcap2ndN   = fd.N; \
         fd.uvMat        = mul(fd.cameraMatrix, fd.N).xy * 0.5 + 0.5; \
+    } \
+    /* Decal Normal Map: positioned/scaled/rotated by the decal placement (same algorithm as \
+       BEFORE_MATCAP) and gated by the decal mask, then composited on top of fd.N exactly like \
+       Normal 3rd. Done here (before reflection/lighting) so the decal's bumps actually react to \
+       light. The placement math is recomputed here (not shared with BEFORE_MATCAP) so the block \
+       stays self-contained across passes that may expand one hook but not the other. Strength is \
+       authored -2..2: lilUnpackNormalScale handles negatives by flipping the tangent xy. */ \
+    if (_CustomDecalNormalEnabled > 0.5) { \
+        float2 _dnTiling = float2(1.0 / max(_CustomDecalSizeX, 0.0001), \
+                                  1.0 / max(_CustomDecalSizeY, 0.0001)); \
+        float2 _dnOffset = 0.5 - float2(_CustomDecalPosX, _CustomDecalPosY) * _dnTiling; \
+        float  _dnAngle  = _CustomDecalAngle * 0.01745329252; \
+        float  _dnSin, _dnCos; \
+        sincos(_dnAngle, _dnSin, _dnCos); \
+        float2 _dnC = fd.uv0 - 0.5; \
+        float2 _dnRotUV = float2(_dnC.x * _dnCos - _dnC.y * _dnSin + 0.5, \
+                                 _dnC.x * _dnSin + _dnC.y * _dnCos + 0.5); \
+        float2 _dnDecalUV = _dnRotUV * _dnTiling + _dnOffset; \
+        float2 _dnDdx = ddx(_dnDecalUV) * DNKW_DECAL_MIP_GRAD_SCALE; \
+        float2 _dnDdy = ddy(_dnDecalUV) * DNKW_DECAL_MIP_GRAD_SCALE; \
+        float  _dnInBounds = step(0.0, _dnDecalUV.x) * step(_dnDecalUV.x, 1.0) \
+                           * step(0.0, _dnDecalUV.y) * step(_dnDecalUV.y, 1.0); \
+        float  _dnMaskTex  = LIL_SAMPLE_2D_GRAD(_CustomDecalMaskTex, sampler_linear_repeat, _dnDecalUV, _dnDdx, _dnDdy).r; \
+        float  _dnMask     = _dnInBounds * _dnMaskTex; \
+        float2 _dnTexUV = _dnDecalUV * _CustomDecalNormalTex_ST.xy + _CustomDecalNormalTex_ST.zw; \
+        float4 _dnRaw   = LIL_SAMPLE_2D_GRAD(_CustomDecalNormalTex, sampler_linear_repeat, _dnTexUV, _dnDdx * _CustomDecalNormalTex_ST.xy, _dnDdy * _CustomDecalNormalTex_ST.xy); \
+        float3 _dnNTS   = lilUnpackNormalScale(_dnRaw, _CustomDecalNormalStrength * _dnMask); \
+        float3 _dnCurTS = mul(fd.TBN, fd.N); \
+        float3 _dnBlend = lilBlendNormal(_dnCurTS, _dnNTS); \
+        fd.N            = normalize(mul(_dnBlend, fd.TBN)); \
+        fd.reflectionN  = fd.N; \
+        fd.matcapN      = fd.N; \
+        fd.matcap2ndN   = fd.N; \
+        fd.uvMat        = mul(fd.cameraMatrix, fd.N).xy * 0.5 + 0.5; \
     }
 
 // BEFORE_REFLECTION - 2nd Reflection
@@ -214,14 +254,16 @@ float3 DNKW_MatcapLighting(float3 mc, float3 lightColor, float enableLighting, f
         float2 _r2MaskUV = fd.uv0 * _CustomRefl2ndMaskTex_ST.xy + _CustomRefl2ndMaskTex_ST.zw; \
         float  _r2Mask   = LIL_SAMPLE_2D(_CustomMaskPacked, sampler_linear_repeat, _r2MaskUV).r; \
         float  _r2Shadow = lerp(1.0, fd.shadowmix, _CustomRefl2ndShadowAttenuation); \
+        /* Blend reflection normal between geometry normal (origN) and the normal-mapped fd.N. */ \
+        float3 _r2N = normalize(lerp(fd.origN, fd.N, _CustomRefl2ndNormalStrength)); \
         float3 _r2Out; \
         if (_CustomRefl2ndAnisotropic > 0.5) { \
             float  _r2HalfShin = exp2(_CustomRefl2ndSmoothness * 10.0 + 1.0) * 0.5; \
             float3 _r2H  = normalize(fd.L + fd.V); \
-            float3 _r2T1 = normalize(fd.TBN[1] + fd.N * _CustomRefl2ndAnisoPrimaryShift); \
+            float3 _r2T1 = normalize(fd.TBN[1] + _r2N * _CustomRefl2ndAnisoPrimaryShift); \
             float  _r2TH1   = dot(_r2T1, _r2H); \
             float  _r2Spec1 = smoothstep(-1.0, 0.0, _r2TH1) * pow(max(0.0, 1.0 - _r2TH1 * _r2TH1), _r2HalfShin); \
-            float3 _r2T2 = normalize(fd.TBN[1] + fd.N * _CustomRefl2ndAnisoSecondaryShift); \
+            float3 _r2T2 = normalize(fd.TBN[1] + _r2N * _CustomRefl2ndAnisoSecondaryShift); \
             float  _r2TH2   = dot(_r2T2, _r2H); \
             float  _r2Spec2 = smoothstep(-1.0, 0.0, _r2TH2) * pow(max(0.0, 1.0 - _r2TH2 * _r2TH2), _r2HalfShin * 0.5); \
             _r2Spec1 = lerp(step(0.5, _r2Spec1), _r2Spec1, _CustomRefl2ndBlur); \
@@ -230,7 +272,7 @@ float3 DNKW_MatcapLighting(float3 mc, float3 lightColor, float enableLighting, f
         } else { \
             float3 _r2L0, _r2L1r, _r2L1g, _r2L1b; \
             LightVolumeSH(fd.positionWS, _r2L0, _r2L1r, _r2L1g, _r2L1b); \
-            float3 _r2Spec = LightVolumeSpecular(float3(1.0, 1.0, 1.0), _CustomRefl2ndSmoothness, 1.0, fd.N, fd.V, _r2L0, _r2L1r, _r2L1g, _r2L1b); \
+            float3 _r2Spec = LightVolumeSpecular(float3(1.0, 1.0, 1.0), _CustomRefl2ndSmoothness, 1.0, _r2N, fd.V, _r2L0, _r2L1r, _r2L1g, _r2L1b); \
             float  _r2Lum  = dot(_r2Spec, float3(0.299, 0.587, 0.114)); \
             _r2Spec = lerp(float3(_r2Lum, _r2Lum, _r2Lum), _r2Spec, _CustomRefl2ndLVColorStrength); \
             /* Post-lerp luminance equals _r2Lum exactly (lerp(L,L,s)=L since luma weights sum to 1), so reuse it. */ \
@@ -334,7 +376,9 @@ float3 DNKW_MatcapLighting(float3 mc, float3 lightColor, float enableLighting, f
     } \
     if (_CustomRim2ndEnabled > 0.5) { \
         float  _rim2Mask   = LIL_SAMPLE_2D(_CustomMaskPacked, sampler_linear_repeat, fd.uv0).g; \
-        float  _rim2NdotV  = saturate(dot(fd.N, fd.V)); \
+        /* Blend rim normal between geometry normal (origN) and the normal-mapped fd.N. */ \
+        float3 _rim2N      = normalize(lerp(fd.origN, fd.N, _CustomRim2ndNormalStrength)); \
+        float  _rim2NdotV  = saturate(dot(_rim2N, fd.V)); \
         float  _rim2Val    = pow(1.0 - _rim2NdotV, _CustomRim2ndPower); \
         _rim2Val = lerp(step(0.5, _rim2Val), _rim2Val, _CustomRim2ndBlur); \
         float  _rim2Shadow = lerp(1.0, fd.shadowmix, _CustomRim2ndShadowAttenuation); \

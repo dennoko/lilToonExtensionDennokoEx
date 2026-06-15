@@ -21,6 +21,7 @@ namespace Dennokoworks
         MaterialProperty _CustomRefl2ndAnisoSecondaryStrength;
         MaterialProperty _CustomRefl2ndAnisoSecondaryShift;
         MaterialProperty _CustomRefl2ndShadowAttenuation;
+        MaterialProperty _CustomRefl2ndNormalStrength;
         MaterialProperty _CustomRefl2ndLVColorStrength;
         MaterialProperty _CustomRefl2ndMainColorStrength;
         MaterialProperty _CustomRefl2ndBlur;
@@ -34,6 +35,7 @@ namespace Dennokoworks
         MaterialProperty _CustomRim2ndBlendMode;
         MaterialProperty _CustomRim2ndShadowAttenuation;
         MaterialProperty _CustomRim2ndMainColorStrength;
+        MaterialProperty _CustomRim2ndNormalStrength;
         MaterialProperty _CustomRim2ndBlur;
 
         // -- Normal Map 3rd --
@@ -76,6 +78,11 @@ namespace Dennokoworks
         MaterialProperty _CustomDecalMatcapShadowDisable;
         MaterialProperty _CustomDecalMatcapEnableLighting;
 
+        // -- Decal Normal Map --
+        MaterialProperty _CustomDecalNormalEnabled;
+        MaterialProperty _CustomDecalNormalTex;
+        MaterialProperty _CustomDecalNormalStrength;
+
         // Foldout states
         static bool _foldRefl2nd      = false;
         static bool _foldRim2nd       = false;
@@ -111,6 +118,7 @@ namespace Dennokoworks
             _CustomRefl2ndAnisoSecondaryStrength = FindProperty("_CustomRefl2ndAnisoSecondaryStrength", props, false);
             _CustomRefl2ndAnisoSecondaryShift  = FindProperty("_CustomRefl2ndAnisoSecondaryShift",  props, false);
             _CustomRefl2ndShadowAttenuation    = FindProperty("_CustomRefl2ndShadowAttenuation",    props, false);
+            _CustomRefl2ndNormalStrength       = FindProperty("_CustomRefl2ndNormalStrength",       props, false);
             _CustomRefl2ndLVColorStrength      = FindProperty("_CustomRefl2ndLVColorStrength",      props, false);
             _CustomRefl2ndMainColorStrength    = FindProperty("_CustomRefl2ndMainColorStrength",    props, false);
             _CustomRefl2ndBlur                 = FindProperty("_CustomRefl2ndBlur",                 props, false);
@@ -123,6 +131,7 @@ namespace Dennokoworks
             _CustomRim2ndBlendMode        = FindProperty("_CustomRim2ndBlendMode",        props, false);
             _CustomRim2ndShadowAttenuation = FindProperty("_CustomRim2ndShadowAttenuation", props, false);
             _CustomRim2ndMainColorStrength = FindProperty("_CustomRim2ndMainColorStrength", props, false);
+            _CustomRim2ndNormalStrength    = FindProperty("_CustomRim2ndNormalStrength",    props, false);
             _CustomRim2ndBlur              = FindProperty("_CustomRim2ndBlur",              props, false);
 
             _CustomNormal3rdEnabled       = FindProperty("_CustomNormal3rdEnabled",       props, false);
@@ -161,6 +170,10 @@ namespace Dennokoworks
             _CustomDecalMatcapBlendMode   = FindProperty("_CustomDecalMatcapBlendMode",   props, false);
             _CustomDecalMatcapShadowDisable = FindProperty("_CustomDecalMatcapShadowDisable", props, false);
             _CustomDecalMatcapEnableLighting = FindProperty("_CustomDecalMatcapEnableLighting", props, false);
+
+            _CustomDecalNormalEnabled     = FindProperty("_CustomDecalNormalEnabled",     props, false);
+            _CustomDecalNormalTex         = FindProperty("_CustomDecalNormalTex",         props, false);
+            _CustomDecalNormalStrength    = FindProperty("_CustomDecalNormalStrength",    props, false);
 
             // Migrate pre-UIEnabled materials
             if (_CustomNormal3rdEnabled?.floatValue > 0.5f && _CustomNormal3rdUIEnabled?.floatValue < 0.5f)
@@ -391,6 +404,7 @@ namespace Dennokoworks
                 _CustomRefl2ndStrength,         _CustomRefl2ndSmoothness,
                 _CustomRefl2ndBlur,             _CustomRefl2ndLVColorStrength,
                 _CustomRefl2ndMainColorStrength, _CustomRefl2ndShadowAttenuation,
+                _CustomRefl2ndNormalStrength,
                 _CustomRefl2ndAnisotropic,      _CustomRefl2ndAnisoPrimaryShift,
                 _CustomRefl2ndAnisoSecondaryColor, _CustomRefl2ndAnisoSecondaryStrength,
                 _CustomRefl2ndAnisoSecondaryShift,
@@ -411,6 +425,7 @@ namespace Dennokoworks
                     Prop(_CustomRefl2ndLVColorStrength,   Loc("label_lv_color_strength"));
                     Prop(_CustomRefl2ndMainColorStrength, Loc("label_main_color_strength"));
                     Prop(_CustomRefl2ndShadowAttenuation, Loc("label_shadow_attenuation"));
+                    Prop(_CustomRefl2ndNormalStrength,    Loc("label_normal_strength"));
                     lilEditorGUI.DrawLine();
 
                     bool isAniso = _CustomRefl2ndAnisotropic != null && _CustomRefl2ndAnisotropic.floatValue > 0.5f;
@@ -448,7 +463,8 @@ namespace Dennokoworks
                 _CustomRim2ndColor,            _CustomRim2ndMaskTex,
                 _CustomRim2ndPower,            _CustomRim2ndBlur,
                 _CustomRim2ndStrength,         _CustomRim2ndMainColorStrength,
-                _CustomRim2ndShadowAttenuation, _CustomRim2ndBlendMode,
+                _CustomRim2ndShadowAttenuation, _CustomRim2ndNormalStrength,
+                _CustomRim2ndBlendMode,
             });
             if (_foldRim2nd)
             {
@@ -465,6 +481,7 @@ namespace Dennokoworks
                     Prop(_CustomRim2ndStrength,         Loc("label_strength"));
                     Prop(_CustomRim2ndMainColorStrength, Loc("label_main_color_strength"));
                     Prop(_CustomRim2ndShadowAttenuation, Loc("label_shadow_attenuation"));
+                    Prop(_CustomRim2ndNormalStrength,    Loc("label_normal_strength"));
                     if (_CustomRim2ndBlendMode != null)
                     {
                         EditorGUI.BeginChangeCheck();
@@ -529,6 +546,7 @@ namespace Dennokoworks
                 _CustomDecalMatcapTex,    _CustomDecalMatcapColor,
                 _CustomDecalMatcapAlpha,  _CustomDecalMatcapBlendMode,
                 _CustomDecalMatcapShadowDisable, _CustomDecalMatcapEnableLighting,
+                _CustomDecalNormalEnabled, _CustomDecalNormalTex, _CustomDecalNormalStrength,
             });
             if (!_foldDecal) return;
 
@@ -588,6 +606,23 @@ namespace Dennokoworks
                     if (EditorGUI.EndChangeCheck())
                         _CustomDecalMatcapBlendMode.floatValue = bm;
                 }
+                EditorGUILayout.EndVertical();
+            }
+            EditorGUILayout.EndVertical();
+
+            // --- Normal Map ---
+            // Placed/scaled/rotated by the Decal base transform and gated by the Decal mask;
+            // tiling/offset of the normal texture is edited via the texture field's ST.
+            EditorGUILayout.Space(4f);
+            EditorGUILayout.LabelField(Loc("label_decal_normal"), lilEditorGUI.boldLabel);
+            EditorGUILayout.BeginVertical(lilEditorGUI.boxOuter);
+            DrawToggle(_CustomDecalNormalEnabled);
+            if (_CustomDecalNormalEnabled != null && _CustomDecalNormalEnabled.floatValue > 0.5f)
+            {
+                EditorGUILayout.BeginVertical(lilEditorGUI.boxInnerHalf);
+                Prop(_CustomDecalNormalTex,      Loc("label_normal_map"));
+                lilEditorGUI.DrawLine();
+                Prop(_CustomDecalNormalStrength, Loc("label_strength"));
                 EditorGUILayout.EndVertical();
             }
             EditorGUILayout.EndVertical();
