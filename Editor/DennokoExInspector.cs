@@ -517,9 +517,10 @@ namespace Dennokoworks
                 Prop(_CustomDecalAngle, Loc("label_decal_angle"));
                 lilEditorGUI.DrawLine();
                 Prop(_CustomDecalMaskTex,       Loc("label_decal_mask"));
-                Prop(_CustomDecalColor,         Loc("label_color"));
-                Prop(_CustomDecalAlpha,         Loc("label_alpha"));
-                Prop(_CustomDecalShadowDisable, Loc("label_shadow_disable"));
+                Prop(_CustomDecalColor,              Loc("label_color"));
+                Prop(_CustomDecalAlpha,              Loc("label_alpha"));
+                Prop(_CustomDecalShadowDisable,      Loc("label_shadow_disable"));
+                Prop(_CustomDecalMatcapEnableLighting, Loc("label_enable_lighting"));
                 if (_CustomDecalBlendMode != null)
                 {
                     EditorGUI.BeginChangeCheck();
@@ -544,9 +545,8 @@ namespace Dennokoworks
                 Prop(_CustomDecalMatcapTex,   Loc("label_texture"));
                 Prop(_CustomDecalMatcapColor, Loc("label_color"));
                 lilEditorGUI.DrawLine();
-                Prop(_CustomDecalMatcapAlpha,          Loc("label_alpha"));
-                Prop(_CustomDecalMatcapShadowDisable,  Loc("label_shadow_disable"));
-                Prop(_CustomDecalMatcapEnableLighting, Loc("label_enable_lighting"));
+                Prop(_CustomDecalMatcapAlpha,         Loc("label_alpha"));
+                Prop(_CustomDecalMatcapShadowDisable, Loc("label_shadow_disable"));
                 if (_CustomDecalMatcapBlendMode != null)
                 {
                     EditorGUI.BeginChangeCheck();

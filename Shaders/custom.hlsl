@@ -178,14 +178,14 @@ float3 DNKW_MatcapLighting(float3 mc, float3 lightColor, float enableLighting, f
         float  _r2Shadow = lerp(1.0, fd.shadowmix, _CustomRefl2ndShadowAttenuation); \
         float3 _r2Out; \
         if (_CustomRefl2ndAnisotropic > 0.5) { \
-            float  _r2Shininess = exp2(_CustomRefl2ndSmoothness * 10.0 + 1.0); \
+            float  _r2HalfShin = exp2(_CustomRefl2ndSmoothness * 10.0 + 1.0) * 0.5; \
             float3 _r2H  = normalize(fd.L + fd.V); \
             float3 _r2T1 = normalize(fd.TBN[1] + fd.N * _CustomRefl2ndAnisoPrimaryShift); \
             float  _r2TH1   = dot(_r2T1, _r2H); \
-            float  _r2Spec1 = smoothstep(-1.0, 0.0, _r2TH1) * pow(sqrt(max(0.0, 1.0 - _r2TH1 * _r2TH1)), _r2Shininess); \
+            float  _r2Spec1 = smoothstep(-1.0, 0.0, _r2TH1) * pow(max(0.0, 1.0 - _r2TH1 * _r2TH1), _r2HalfShin); \
             float3 _r2T2 = normalize(fd.TBN[1] + fd.N * _CustomRefl2ndAnisoSecondaryShift); \
             float  _r2TH2   = dot(_r2T2, _r2H); \
-            float  _r2Spec2 = smoothstep(-1.0, 0.0, _r2TH2) * pow(sqrt(max(0.0, 1.0 - _r2TH2 * _r2TH2)), _r2Shininess * 0.5); \
+            float  _r2Spec2 = smoothstep(-1.0, 0.0, _r2TH2) * pow(max(0.0, 1.0 - _r2TH2 * _r2TH2), _r2HalfShin * 0.5); \
             _r2Spec1 = lerp(step(0.5, _r2Spec1), _r2Spec1, _CustomRefl2ndBlur); \
             _r2Spec2 = lerp(step(0.5, _r2Spec2), _r2Spec2, _CustomRefl2ndBlur); \
             _r2Out = (_CustomRefl2ndColor.rgb * _r2Spec1 + _CustomRefl2ndAnisoSecondaryColor.rgb * _r2Spec2 * _CustomRefl2ndAnisoSecondaryStrength) * _CustomRefl2ndStrength * _r2Mask * _r2Shadow * fd.lightColor; \
@@ -195,9 +195,9 @@ float3 DNKW_MatcapLighting(float3 mc, float3 lightColor, float enableLighting, f
             float3 _r2Spec = LightVolumeSpecular(float3(1.0, 1.0, 1.0), _CustomRefl2ndSmoothness, 1.0, fd.N, fd.V, _r2L0, _r2L1r, _r2L1g, _r2L1b); \
             float  _r2Lum  = dot(_r2Spec, float3(0.299, 0.587, 0.114)); \
             _r2Spec = lerp(float3(_r2Lum, _r2Lum, _r2Lum), _r2Spec, _CustomRefl2ndLVColorStrength); \
-            float  _r2PostLum = dot(_r2Spec, float3(0.299, 0.587, 0.114)); \
-            float  _r2Shaped  = lerp(step(0.5, _r2PostLum), _r2PostLum, _CustomRefl2ndBlur); \
-            _r2Spec *= _r2Shaped / max(_r2PostLum, 1e-5); \
+            /* Post-lerp luminance equals _r2Lum exactly (lerp(L,L,s)=L since luma weights sum to 1), so reuse it. */ \
+            float  _r2Shaped  = lerp(step(0.5, _r2Lum), _r2Lum, _CustomRefl2ndBlur); \
+            _r2Spec *= _r2Shaped / max(_r2Lum, 1e-5); \
             _r2Out  = _r2Spec * _CustomRefl2ndColor.rgb * _CustomRefl2ndStrength * _r2Mask; \
         } \
         fd.col.rgb += _r2Out * lerp(float3(1.0, 1.0, 1.0), fd.albedo, _CustomRefl2ndMainColorStrength); \
@@ -212,12 +212,13 @@ float3 DNKW_MatcapLighting(float3 mc, float3 lightColor, float enableLighting, f
         float3 _r2H         = normalize(fd.L + fd.V); \
         float3 _r2Out; \
         if (_CustomRefl2ndAnisotropic > 0.5) { \
+            float  _r2HalfShin = _r2Shininess * 0.5; \
             float3 _r2T1    = normalize(fd.TBN[1] + fd.N * _CustomRefl2ndAnisoPrimaryShift); \
             float  _r2TH1   = dot(_r2T1, _r2H); \
-            float  _r2Spec1 = smoothstep(-1.0, 0.0, _r2TH1) * pow(sqrt(max(0.0, 1.0 - _r2TH1 * _r2TH1)), _r2Shininess); \
+            float  _r2Spec1 = smoothstep(-1.0, 0.0, _r2TH1) * pow(max(0.0, 1.0 - _r2TH1 * _r2TH1), _r2HalfShin); \
             float3 _r2T2    = normalize(fd.TBN[1] + fd.N * _CustomRefl2ndAnisoSecondaryShift); \
             float  _r2TH2   = dot(_r2T2, _r2H); \
-            float  _r2Spec2 = smoothstep(-1.0, 0.0, _r2TH2) * pow(sqrt(max(0.0, 1.0 - _r2TH2 * _r2TH2)), _r2Shininess * 0.5); \
+            float  _r2Spec2 = smoothstep(-1.0, 0.0, _r2TH2) * pow(max(0.0, 1.0 - _r2TH2 * _r2TH2), _r2HalfShin * 0.5); \
             _r2Spec1 = lerp(step(0.5, _r2Spec1), _r2Spec1, _CustomRefl2ndBlur); \
             _r2Spec2 = lerp(step(0.5, _r2Spec2), _r2Spec2, _CustomRefl2ndBlur); \
             _r2Out = (_CustomRefl2ndColor.rgb * _r2Spec1 + _CustomRefl2ndAnisoSecondaryColor.rgb * _r2Spec2 * _CustomRefl2ndAnisoSecondaryStrength) * _CustomRefl2ndStrength * _r2Mask * _r2Shadow * fd.lightColor; \
@@ -250,7 +251,8 @@ float3 DNKW_MatcapLighting(float3 mc, float3 lightColor, float enableLighting, f
 //
 // BlendMode: 0=Replace, 1=Add, 2=Screen, 3=Multiply.
 #define BEFORE_MATCAP \
-    { \
+    /* Skip the per-pixel divide entirely when neither shadow-suppress is in use. */ \
+    if (_CustomMain2ndShadowDisable > 0.001 || _CustomMain3rdShadowDisable > 0.001) { \
         float  _mc_sinv  = 1.0 - fd.shadowmix; \
         float3 _mc_ratio = fd.col.rgb / max(fd.albedo, float3(0.001, 0.001, 0.001)); \
         if (_CustomMain2ndShadowDisable > 0.001) { \
@@ -293,6 +295,10 @@ float3 DNKW_MatcapLighting(float3 mc, float3 lightColor, float enableLighting, f
         float  _dShadow = lerp(1.0, fd.shadowmix, _CustomDecalShadowDisable); \
         float  _dAlpha  = _dTex.a * _CustomDecalAlpha * _dnkw_decalMask * _dShadow; \
         float3 _dColor  = _dTex.rgb * _CustomDecalColor.rgb; \
+        /* The base decal intentionally shares the matcap's _CustomDecalMatcapEnableLighting toggle. \
+           The property name is kept (not renamed to a base-specific one) for backward compatibility \
+           with materials authored against the previous implementation. Blend mode stays base-specific. */ \
+        _dColor = DNKW_MatcapLighting(_dColor, fd.lightColor, _CustomDecalMatcapEnableLighting, _CustomDecalBlendMode); \
         fd.col.rgb = DNKW_DecalBlend(fd.col.rgb, _dColor, _dAlpha, _CustomDecalBlendMode); \
     }
 
@@ -301,8 +307,9 @@ float3 DNKW_MatcapLighting(float3 mc, float3 lightColor, float enableLighting, f
 // Both base and matcap share the same positioned/scaled/rotated decal mask.
 #define BEFORE_RIMLIGHT \
     if (_CustomDecalMatcapEnabled > 0.5) { \
-        float3 _mcNVS    = mul((float3x3)UNITY_MATRIX_V, fd.N); \
-        float2 _mcUV     = _mcNVS.xy * 0.5 + 0.5; \
+        /* Reuse lilToon's fd.uvMat (head-centered cameraMatrix, updated for Normal3rd above): \
+           VR-correct (no per-eye stereo divergence) and saves a matrix multiply vs. UNITY_MATRIX_V. */ \
+        float2 _mcUV     = fd.uvMat; \
         float4 _mcTex    = LIL_SAMPLE_2D(_CustomDecalMatcapTex, sampler_linear_repeat, _mcUV); \
         float  _mcShadow = lerp(1.0, fd.shadowmix, _CustomDecalMatcapShadowDisable); \
         float3 _mcColor  = _mcTex.rgb * _CustomDecalMatcapColor.rgb; \
