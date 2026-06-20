@@ -139,16 +139,24 @@ float3 DNKW_MatcapLighting(float3 mc, float3 lightColor, float enableLighting, f
         normalmap       = lilBlendNormal(normalmap, lilUnpackNormalScale(_n2Tex, _n2Scale)); \
     }
 
-// BEFORE_MAIN - declare the Main 4th shadow-disable carry variable.
-// It is declared here (the earliest hook, present in every forward/meta pass) rather than in
-// BEFORE_SHADOW because some passes expand the consumer (BEFORE_EMISSION_1ST) but NOT
-// BEFORE_SHADOW (e.g. Gem, Meta). Declaring at BEFORE_MAIN guarantees the variable exists in
-// every pass that references it; passes without BEFORE_SHADOW simply leave it at 0 (no-op).
-#define BEFORE_MAIN \
-    float3 _dnkw_main4thDelta = float3(0.0, 0.0, 0.0);
-
-// BEFORE_SHADOW - Main Color 4th (stripped lilGetMain2nd; composited at the main-color
-// stage, i.e. before lighting, so it is lit exactly like lilToon's Main 2nd/3rd).
+// BEFORE_RIMSHADE - Main Color 4th (stripped lilGetMain2nd).
+//
+// Placement: this hook fires AFTER lilToon's full Main 1st/2nd/3rd stack is assembled.
+// lilToon blends the *un-lit* portion of Main 2nd/3rd (the `1 - EnableLighting` share) into
+// fd.col only AFTER OVERRIDE_SHADOW (lil_pass_forward_normal.hlsl ~463-468), which is AFTER
+// the older BEFORE_SHADOW hook. Compositing Main 4th at BEFORE_SHADOW therefore let those
+// un-lit Main 2nd/3rd shares paint over Main 4th, hiding it whenever Main 2nd/3rd were used
+// with EnableLighting < 1 (the common case). BEFORE_RIMSHADE runs after that blend, so Main 4th
+// now reliably sits on top of the whole main-color stack, and still before the extension's own
+// Reflection/Matcap/Rim layers.
+//
+// Lighting: to keep Main 4th lit exactly like the base main color (the original design intent),
+// we work in albedo space. fd.albedo is the un-lit main color and (fd.col / fd.albedo) is the
+// per-pixel lighting that was applied. We re-blend Main 4th into a new albedo and re-apply that
+// lighting factor, which is exact for every lilBlendColor mode (lighting is a linear multiply).
+// When Main 4th is disabled or its weight is 0 the new albedo equals fd.albedo, so fd.col is
+// reconstructed unchanged (no-op).
+//
 // Omitted vs lilToon: MSDF / scroll / rotation / distance fade / dissolve.
 // Kept: HDR color, texture (tiling/offset), UV channel select (0-3 + MatCap),
 //       blend mode (lilBlendColor: 0=Normal,1=Add,2=Screen,3=Multiply),
@@ -156,20 +164,19 @@ float3 DNKW_MatcapLighting(float3 mc, float3 lightColor, float enableLighting, f
 //
 // Mask: the draw range is gated by an INDEPENDENT mask texture authored via the
 // _CustomMain4thMaskTex slot and baked into _CustomMaskPacked.a (sampled at fd.uv0, mesh UV).
-// The blend weight is mask * _CustomMain4thColor.a; the main texture's own alpha is NOT used
-// as the range. Default packed mask is white (.a = 1) so an unmasked layer covers fully.
+// The color blend weight is mask * _CustomMain4thColor.a; the main texture's own alpha is NOT
+// used as the range. Default packed mask is white (.a = 1) so an unmasked layer covers fully.
 //
-// AlphaMode writes fd.col.a unconditionally: lilToon guards it with #if LIL_RENDER!=0,
-// but #if is illegal inside a macro body. In opaque passes fd.col.a is unused at output
-// and cutout clipping already happened earlier, so the write is harmless there.
+// AlphaMode writes fd.col.a unconditionally: lilToon guards it with #if LIL_RENDER!=0, but #if
+// is illegal inside a macro body. In opaque passes fd.col.a is unused at output and cutout
+// clipping already happened earlier, so the write is harmless there. AlphaMode uses the pre-
+// shadow weight (_m4a) so transparency is unaffected by Shadow Disable.
 //
-// Shadow Disable: fd.shadowmix is not yet computed at this hook, so the albedo-space
-// contribution of Main 4th is captured into _dnkw_main4thDelta (declared at BEFORE_MAIN) and
-// the shadow correction is applied later at BEFORE_EMISSION_1ST (where shadowmix is available).
-#define BEFORE_SHADOW \
+// Shadow Disable: fd.shadowmix is valid at this hook, so the color blend weight is faded out in
+// shadow directly (only the color contribution, not the alpha-mode write above).
+#define BEFORE_RIMSHADE \
     if (_CustomMain4thEnabled > 0.5) { \
-        float3 _m4Pre = fd.col.rgb; \
-        float2 _m4UV  = fd.uv0; \
+        float2 _m4UV = fd.uv0; \
         if(_CustomMain4thTex_UVMode == 1) _m4UV = fd.uv1; \
         if(_CustomMain4thTex_UVMode == 2) _m4UV = fd.uv2; \
         if(_CustomMain4thTex_UVMode == 3) _m4UV = fd.uv3; \
@@ -184,8 +191,10 @@ float3 DNKW_MatcapLighting(float3 mc, float3 lightColor, float enableLighting, f
             if(_CustomMain4thTexAlphaMode == 3) fd.col.a = saturate(fd.col.a + _m4a); \
             if(_CustomMain4thTexAlphaMode == 4) fd.col.a = saturate(fd.col.a - _m4a); \
         } \
-        fd.col.rgb = lilBlendColor(fd.col.rgb, _m4rgb, _m4a, _CustomMain4thTexBlendMode); \
-        _dnkw_main4thDelta = fd.col.rgb - _m4Pre; \
+        float  _m4aRGB = _m4a * (1.0 - (1.0 - fd.shadowmix) * _CustomMain4thShadowDisable); \
+        float3 _m4Light    = fd.col.rgb / max(fd.albedo, float3(1e-4, 1e-4, 1e-4)); \
+        float3 _m4NewAlb   = lilBlendColor(fd.albedo, _m4rgb, _m4aRGB, _CustomMain4thTexBlendMode); \
+        fd.col.rgb = _m4NewAlb * _m4Light; \
     }
 
 // BEFORE_AUDIOLINK - 3rd Normal Map (composited after lilToon's normal pipeline)
@@ -357,23 +366,11 @@ float3 DNKW_MatcapLighting(float3 mc, float3 lightColor, float enableLighting, f
         fd.col.rgb = DNKW_DecalBlend(fd.col.rgb, _mcColor, _mcAlpha, _CustomDecalMatcapBlendMode); \
     }
 
-// BEFORE_EMISSION_1ST - Main Color 4th shadow disable + 2nd Rim
-//
-// Main 4th shadow disable: removes Main 4th's contribution in shadow areas. The layer's
-// albedo-space contribution (_dnkw_main4thDelta, declared at BEFORE_MAIN and set at
-// BEFORE_SHADOW) is converted to lit space via the lighting ratio (fd.col/fd.albedo) and
-// subtracted scaled by the shadow amount (1 - shadowmix). This hook runs after shadow, so
-// fd.shadowmix is valid. In passes that lack BEFORE_SHADOW (Gem/Meta) the delta stays 0 and
-// this is a no-op. The delta is not saturated so darkening blend modes (Multiply) are also
-// correctly undone in shadow.
+// BEFORE_EMISSION_1ST - 2nd Rim
+// (Main Color 4th, incl. its Shadow Disable, is handled at BEFORE_RIMSHADE.)
 //
 // 2nd Rim: applied after standard rim light. BlendMode: 0=RimLight(Add) / 1=RimShade(Multiply)
 #define BEFORE_EMISSION_1ST \
-    if (_CustomMain4thShadowDisable > 0.001) { \
-        float3 _m4dRatio = fd.col.rgb / max(fd.albedo, float3(0.001, 0.001, 0.001)); \
-        fd.col.rgb -= _dnkw_main4thDelta * _m4dRatio * ((1.0 - fd.shadowmix) * _CustomMain4thShadowDisable); \
-        fd.col.rgb = max(fd.col.rgb, 0.0); \
-    } \
     if (_CustomRim2ndEnabled > 0.5) { \
         float  _rim2Mask   = LIL_SAMPLE_2D(_CustomMaskPacked, sampler_linear_repeat, fd.uv0).g; \
         /* Blend rim normal between geometry normal (origN) and the normal-mapped fd.N. */ \
