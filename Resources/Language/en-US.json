@@ -10,6 +10,7 @@
   "label_smoothness": "Smoothness",
   "label_blur": "Blur",
   "label_lv_color_strength": "LV Color Strength",
+  "label_refl2nd_direct_blend": "Direct Light Blend",
   "label_main_color_strength": "Main Color Strength",
   "label_normal_strength": "Normal Map Strength",
   "label_shadow_attenuation": "Shadow Attenuation",

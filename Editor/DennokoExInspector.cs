@@ -23,6 +23,7 @@ namespace Dennokoworks
         MaterialProperty _CustomRefl2ndShadowAttenuation;
         MaterialProperty _CustomRefl2ndNormalStrength;
         MaterialProperty _CustomRefl2ndLVColorStrength;
+        MaterialProperty _CustomRefl2ndDirectBlend;
         MaterialProperty _CustomRefl2ndMainColorStrength;
         MaterialProperty _CustomRefl2ndBlur;
 
@@ -120,6 +121,7 @@ namespace Dennokoworks
             _CustomRefl2ndShadowAttenuation    = FindProperty("_CustomRefl2ndShadowAttenuation",    props, false);
             _CustomRefl2ndNormalStrength       = FindProperty("_CustomRefl2ndNormalStrength",       props, false);
             _CustomRefl2ndLVColorStrength      = FindProperty("_CustomRefl2ndLVColorStrength",      props, false);
+            _CustomRefl2ndDirectBlend          = FindProperty("_CustomRefl2ndDirectBlend",          props, false);
             _CustomRefl2ndMainColorStrength    = FindProperty("_CustomRefl2ndMainColorStrength",    props, false);
             _CustomRefl2ndBlur                 = FindProperty("_CustomRefl2ndBlur",                 props, false);
 
@@ -403,6 +405,7 @@ namespace Dennokoworks
                 _CustomRefl2ndMaskTex,          _CustomRefl2ndColor,
                 _CustomRefl2ndStrength,         _CustomRefl2ndSmoothness,
                 _CustomRefl2ndBlur,             _CustomRefl2ndLVColorStrength,
+                _CustomRefl2ndDirectBlend,
                 _CustomRefl2ndMainColorStrength, _CustomRefl2ndShadowAttenuation,
                 _CustomRefl2ndNormalStrength,
                 _CustomRefl2ndAnisotropic,      _CustomRefl2ndAnisoPrimaryShift,
@@ -423,6 +426,7 @@ namespace Dennokoworks
                     Prop(_CustomRefl2ndSmoothness,        Loc("label_smoothness"));
                     Prop(_CustomRefl2ndBlur,              Loc("label_blur"));
                     Prop(_CustomRefl2ndLVColorStrength,   Loc("label_lv_color_strength"));
+                    Prop(_CustomRefl2ndDirectBlend,       Loc("label_refl2nd_direct_blend"));
                     Prop(_CustomRefl2ndMainColorStrength, Loc("label_main_color_strength"));
                     Prop(_CustomRefl2ndShadowAttenuation, Loc("label_shadow_attenuation"));
                     Prop(_CustomRefl2ndNormalStrength,    Loc("label_normal_strength"));

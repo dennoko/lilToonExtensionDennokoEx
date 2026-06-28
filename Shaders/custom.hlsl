@@ -35,6 +35,7 @@
     float  _CustomRefl2ndLVColorStrength; \
     float  _CustomRefl2ndMainColorStrength; \
     float  _CustomRefl2ndBlur; \
+    float  _CustomRefl2ndDirectBlend; \
     float4 _CustomRefl2ndMaskTex_ST; \
     float  _CustomRim2ndMainColorStrength; \
     float  _CustomRim2ndBlur; \
@@ -282,12 +283,17 @@ float3 DNKW_MatcapLighting(float3 mc, float3 lightColor, float enableLighting, f
             float3 _r2L0, _r2L1r, _r2L1g, _r2L1b; \
             LightVolumeSH(fd.positionWS, _r2L0, _r2L1r, _r2L1g, _r2L1b); \
             float3 _r2Spec = LightVolumeSpecular(float3(1.0, 1.0, 1.0), _CustomRefl2ndSmoothness, 1.0, _r2N, fd.V, _r2L0, _r2L1r, _r2L1g, _r2L1b); \
+            /* Direct-light Blinn-Phong blend: supplements LV when no volume is present in scene. */ \
+            float  _r2BPShin = exp2(_CustomRefl2ndSmoothness * 10.0 + 1.0); \
+            float3 _r2BPH    = normalize(fd.L + fd.V); \
+            float3 _r2SpecBP = pow(max(0.0, dot(_r2N, _r2BPH)), _r2BPShin) * fd.lightColor; \
+            _r2Spec += _r2SpecBP * _CustomRefl2ndDirectBlend; \
             float  _r2Lum  = dot(_r2Spec, float3(0.299, 0.587, 0.114)); \
             _r2Spec = lerp(float3(_r2Lum, _r2Lum, _r2Lum), _r2Spec, _CustomRefl2ndLVColorStrength); \
             /* Post-lerp luminance equals _r2Lum exactly (lerp(L,L,s)=L since luma weights sum to 1), so reuse it. */ \
             float  _r2Shaped  = lerp(step(0.5, _r2Lum), _r2Lum, _CustomRefl2ndBlur); \
             _r2Spec *= _r2Shaped / max(_r2Lum, 1e-5); \
-            _r2Out  = _r2Spec * _CustomRefl2ndColor.rgb * _CustomRefl2ndStrength * _r2Mask; \
+            _r2Out  = _r2Spec * _CustomRefl2ndColor.rgb * _CustomRefl2ndStrength * _r2Mask * _r2Shadow; \
         } \
         fd.col.rgb += _r2Out * lerp(float3(1.0, 1.0, 1.0), fd.albedo, _CustomRefl2ndMainColorStrength); \
     }

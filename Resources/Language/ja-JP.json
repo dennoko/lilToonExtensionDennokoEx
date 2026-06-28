@@ -10,6 +10,7 @@
   "label_smoothness": "滑らかさ",
   "label_blur": "ブラー",
   "label_lv_color_strength": "LVカラー強度",
+  "label_refl2nd_direct_blend": "直接光ブレンド",
   "label_main_color_strength": "メインカラー強度",
   "label_normal_strength": "ノーマルマップ強度",
   "label_shadow_attenuation": "影減衰",

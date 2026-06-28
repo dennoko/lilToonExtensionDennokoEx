@@ -22,6 +22,7 @@
         _CustomRefl2ndShadowAttenuation ("Reflection 2nd Shadow Attenuation", Range(0, 1)) = 0
         _CustomRefl2ndNormalStrength ("Reflection 2nd Normal Strength", Range(0, 1)) = 1
         _CustomRefl2ndBlur ("Reflection 2nd Blur", Range(0, 1)) = 1
+        _CustomRefl2ndDirectBlend ("Reflection 2nd Direct Light Blend", Range(0, 1)) = 0
 
         //----------------------------------------------------------------------------------------------------------------------
         // Rim 2nd
