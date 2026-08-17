@@ -42,7 +42,8 @@ namespace Dennokoworks
 
                         if (!clones.TryGetValue(m, out var clone))
                         {
-                            var packed = DennokoExMaskPacker.Bake(m);
+                            // forBuild: mipmapped + block compressed, this one ships on the avatar.
+                            var packed = DennokoExMaskPacker.Bake(m, forBuild: true);
                             if (packed == null) { clones[m] = null; continue; }
 
                             clone = new Material(m) { name = m.name + " (DnkwPacked)" };

@@ -199,6 +199,11 @@ namespace Dennokoworks
 
             EditorGUILayout.LabelField("DennokoEx", EditorStyles.centeredGreyMiniLabel);
 
+            // A material that was just switched TO DennokoEx has no packed-mask preview yet and
+            // nothing else triggers one until the next domain reload. Cheap no-op once baked.
+            foreach (var t0 in m_MaterialEditor.targets)
+                if (t0 is Material m0) DennokoExMaskSync.EnsurePreview(m0);
+
             // Manual mask-preview refresh (re-bakes the in-memory _CustomMaskPacked for these materials).
             if (GUILayout.Button(Loc("btn_refresh_mask_preview")))
                 foreach (var t in m_MaterialEditor.targets)
@@ -418,6 +423,8 @@ namespace Dennokoworks
                 DrawToggle(_CustomRefl2ndEnabled);
                 if (_CustomRefl2ndEnabled != null && _CustomRefl2ndEnabled.floatValue > 0.5f)
                 {
+                    bool isAniso = _CustomRefl2ndAnisotropic != null && _CustomRefl2ndAnisotropic.floatValue > 0.5f;
+
                     EditorGUILayout.BeginVertical(lilEditorGUI.boxInnerHalf);
                     Prop(_CustomRefl2ndMaskTex,    Loc("label_mask"));
                     Prop(_CustomRefl2ndColor,      Loc("label_color"));
@@ -425,14 +432,18 @@ namespace Dennokoworks
                     Prop(_CustomRefl2ndStrength,          Loc("label_strength"));
                     Prop(_CustomRefl2ndSmoothness,        Loc("label_smoothness"));
                     Prop(_CustomRefl2ndBlur,              Loc("label_blur"));
-                    Prop(_CustomRefl2ndLVColorStrength,   Loc("label_lv_color_strength"));
-                    Prop(_CustomRefl2ndDirectBlend,       Loc("label_refl2nd_direct_blend"));
+                    // Light-Volume only: the anisotropic path is pure Kajiya-Kay on the direct light,
+                    // so these two have no effect there and are hidden instead of lying to the user.
+                    if (!isAniso)
+                    {
+                        Prop(_CustomRefl2ndLVColorStrength, Loc("label_lv_color_strength"));
+                        Prop(_CustomRefl2ndDirectBlend,     Loc("label_refl2nd_direct_blend"));
+                    }
                     Prop(_CustomRefl2ndMainColorStrength, Loc("label_main_color_strength"));
                     Prop(_CustomRefl2ndShadowAttenuation, Loc("label_shadow_attenuation"));
                     Prop(_CustomRefl2ndNormalStrength,    Loc("label_normal_strength"));
                     lilEditorGUI.DrawLine();
 
-                    bool isAniso = _CustomRefl2ndAnisotropic != null && _CustomRefl2ndAnisotropic.floatValue > 0.5f;
                     if (_CustomRefl2ndAnisotropic != null)
                     {
                         EditorGUI.BeginChangeCheck();

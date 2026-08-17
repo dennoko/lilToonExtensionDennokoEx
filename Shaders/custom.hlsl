@@ -110,35 +110,36 @@ float3 DNKW_DecalBlend(float3 base, float3 overlay, float alpha, float mode)
     return r;
 }
 
-// Matcap lighting correction — mirrors lilToon's lilGetMatCap (_MatCapEnableLighting).
-// Without this the decal matcap renders at constant full brightness and "floats" against
-// the surrounding environment. fd.lightColor is the scene/light color of the current pass.
-// Implemented as a function (not inline in the macro) so the LIL_PASS_FORWARDADD branch can
-// use #if — preprocessor directives are illegal inside an object-like macro body.
-// ForwardBase: lerp toward lightColor by enableLighting (matches lilToon base pass).
-// ForwardAdd : multiply by the additive light color so extra lights don't add the matcap at
-//   full brightness; skipped for Multiply blend (mode 3), same as lilToon's `_MatCapBlendMode < 3`.
-float3 DNKW_MatcapLighting(float3 mc, float3 lightColor, float enableLighting, float blendMode)
-{
-    #if !defined(LIL_PASS_FORWARDADD)
-        return lerp(mc, mc * lightColor, enableLighting);
-    #else
-        return (blendMode < 3) ? mc * lightColor * enableLighting : mc;
-    #endif
-}
+// Pass-dependent helpers (DNKW_MatcapLighting / DNKW_Refl2ndLVSpecular) are NOT declared here:
+// this file is included from the shader-level HLSLINCLUDE, which the compiler places BEFORE the
+// pass body where lilToon writes `#define LIL_PASS_FORWARDADD`. A `#if !defined(LIL_PASS_FORWARDADD)`
+// written here is therefore ALWAYS true and its additive-pass branch is dead code. Those helpers
+// live in custom_insert.hlsl, which lilToon injects inside the pass, after that define. The hook
+// macros below are only *expanded* in lil_pass_*.hlsl, i.e. after that file, so calling them is fine.
 
-// OVERRIDE_NORMAL_2ND - Normal Map 2nd preserving UVMode and blend
-#define OVERRIDE_NORMAL_2ND \
-    if(_UseBump2ndMap) \
-    { \
-        float2 _n2UV    = fd.uv0; \
-        if(_Bump2ndMap_UVMode == 1) _n2UV = fd.uv1; \
-        if(_Bump2ndMap_UVMode == 2) _n2UV = fd.uv2; \
-        if(_Bump2ndMap_UVMode == 3) _n2UV = fd.uv3; \
-        float4 _n2Tex   = LIL_SAMPLE_2D_ST(_Bump2ndMap, lil_sampler_linear_repeat, _n2UV); \
-        float  _n2Scale = _Bump2ndScale * LIL_SAMPLE_2D_ST(_Bump2ndScaleMask, sampler_MainTex, fd.uvMain).r; \
-        normalmap       = lilBlendNormal(normalmap, lilUnpackNormalScale(_n2Tex, _n2Scale)); \
-    }
+// Refresh everything lilToon derives from fd.N. lilToon computes these once, BEFORE the
+// BEFORE_AUDIOLINK hook (lil_pass_forward_normal.hlsl ~300-316), so any hook that changes fd.N must
+// recompute them or the change is silently ignored by later stages:
+//   reflectionN/matcapN/matcap2ndN/uvMat -> reflection & matcap
+//   ln                                   -> the toon shadow ramp (OVERRIDE_SHADOW)
+//   nv/nvabs/uvRim                       -> lilToon's rim light and other view-dependent terms
+// In passes without LIL_V2F_POSITION_WS, fd.V stays at its init value and these fields keep the
+// same values lilToon would have left them at, so writing them unconditionally is safe.
+#define DNKW_REFRESH_NORMAL_DERIVED \
+    fd.reflectionN  = fd.N; \
+    fd.matcapN      = fd.N; \
+    fd.matcap2ndN   = fd.N; \
+    fd.uvMat        = mul(fd.cameraMatrix, fd.N).xy * 0.5 + 0.5; \
+    fd.ln           = dot(fd.L, fd.N); \
+    fd.nv           = saturate(dot(fd.N, fd.V)); \
+    fd.nvabs        = abs(dot(fd.N, fd.V)); \
+    fd.uvRim        = float2(fd.nvabs, fd.nvabs);
+
+// Normal Map 2nd is NOT overridden: lilToon's own OVERRIDE_NORMAL_2ND is used as-is.
+// (An override existed while this extension added UV scroll to Normal Map 1st/2nd. That feature
+//  was dropped, and the leftover override differed from lilToon only by sampling
+//  _Bump2ndScaleMask unconditionally — which also blocked lilToon's shader optimizer from
+//  stripping that texture, wasting one of the 64 texture parameters in every variant.)
 
 // BEFORE_RIMSHADE - Main Color 4th (stripped lilGetMain2nd).
 //
@@ -193,7 +194,17 @@ float3 DNKW_MatcapLighting(float3 mc, float3 lightColor, float enableLighting, f
             if(_CustomMain4thTexAlphaMode == 4) fd.col.a = saturate(fd.col.a - _m4a); \
         } \
         float  _m4aRGB = _m4a * (1.0 - (1.0 - fd.shadowmix) * _CustomMain4thShadowDisable); \
-        float3 _m4Light    = fd.col.rgb / max(fd.albedo, float3(1e-4, 1e-4, 1e-4)); \
+        /* Per-channel lighting factor. A channel whose albedo is ~0 carries no lighting information \
+           (col = albedo * light = 0 there), so dividing would make Main 4th invisible in that \
+           channel — a pure red base hid every blue overlay, a pure black base hid Main 4th \
+           entirely. Those channels fall back to the scalar factor derived from the whole color, \
+           and a fully black albedo falls back to the pass light color. Where albedo is normal the \
+           lerp weight is 1, so the exact reconstruction (and the disabled/zero-weight no-op) is \
+           unchanged. */ \
+        float  _m4AlbSum   = dot(fd.albedo, float3(1.0, 1.0, 1.0)); \
+        float  _m4LightS   = dot(fd.col.rgb, float3(1.0, 1.0, 1.0)) / max(_m4AlbSum, 1e-4); \
+        float3 _m4LightFB  = (_m4AlbSum > 1e-4) ? float3(_m4LightS, _m4LightS, _m4LightS) : fd.lightColor; \
+        float3 _m4Light    = lerp(_m4LightFB, fd.col.rgb / max(fd.albedo, float3(1e-4, 1e-4, 1e-4)), saturate(fd.albedo * 1000.0)); \
         float3 _m4NewAlb   = lilBlendColor(fd.albedo, _m4rgb, _m4aRGB, _CustomMain4thTexBlendMode); \
         fd.col.rgb = _m4NewAlb * _m4Light; \
     }
@@ -202,8 +213,9 @@ float3 DNKW_MatcapLighting(float3 mc, float3 lightColor, float enableLighting, f
 // Uses lilUnpackNormalScale + lilBlendNormal, identical to lilToon's 1st->2nd blend,
 // so strength scales the tangent xy without clamping (values >1 amplify, matching 1st/2nd)
 // and additively layers on top of the existing 1st/2nd result.
-// fd.reflectionN/matcapN/matcap2ndN/uvMat are updated here because they were set
-// from the pre-3rd fd.N earlier in the pipeline (lil_pass_forward_normal.hlsl:314-316).
+// Everything lilToon derived from the pre-3rd fd.N is refreshed via DNKW_REFRESH_NORMAL_DERIVED
+// (reflection/matcap normals, matcap UV, and the ln/nv/nvabs/uvRim dots that drive the toon
+// shadow ramp and rim light).
 #define BEFORE_AUDIOLINK \
     if (_CustomNormal3rdEnabled > 0.5) { \
         float2 _n3UV    = fd.uv0 * _CustomNormal3rdTex_ST.xy + _CustomNormal3rdTex_ST.zw; \
@@ -213,10 +225,7 @@ float3 DNKW_MatcapLighting(float3 mc, float3 lightColor, float enableLighting, f
         float3 _nCurTS  = mul(fd.TBN, fd.N); \
         float3 _nBlend  = lilBlendNormal(_nCurTS, _n3NTS); \
         fd.N            = normalize(mul(_nBlend, fd.TBN)); \
-        fd.reflectionN  = fd.N; \
-        fd.matcapN      = fd.N; \
-        fd.matcap2ndN   = fd.N; \
-        fd.uvMat        = mul(fd.cameraMatrix, fd.N).xy * 0.5 + 0.5; \
+        DNKW_REFRESH_NORMAL_DERIVED \
     } \
     /* Decal Normal Map: positioned/scaled/rotated by the decal placement (same algorithm as \
        BEFORE_MATCAP) and gated by the decal mask, then composited on top of fd.N exactly like \
@@ -239,7 +248,7 @@ float3 DNKW_MatcapLighting(float3 mc, float3 lightColor, float enableLighting, f
         float2 _dnDdy = ddy(_dnDecalUV) * DNKW_DECAL_MIP_GRAD_SCALE; \
         float  _dnInBounds = step(0.0, _dnDecalUV.x) * step(_dnDecalUV.x, 1.0) \
                            * step(0.0, _dnDecalUV.y) * step(_dnDecalUV.y, 1.0); \
-        float  _dnMaskTex  = LIL_SAMPLE_2D_GRAD(_CustomDecalMaskTex, sampler_linear_repeat, _dnDecalUV, _dnDdx, _dnDdy).r; \
+        float  _dnMaskTex  = LIL_SAMPLE_2D_GRAD(_CustomDecalMaskTex, lil_sampler_linear_clamp, _dnDecalUV, _dnDdx, _dnDdy).r; \
         float  _dnMask     = _dnInBounds * _dnMaskTex; \
         float2 _dnTexUV = _dnDecalUV * _CustomDecalNormalTex_ST.xy + _CustomDecalNormalTex_ST.zw; \
         float4 _dnRaw   = LIL_SAMPLE_2D_GRAD(_CustomDecalNormalTex, sampler_linear_repeat, _dnTexUV, _dnDdx * _CustomDecalNormalTex_ST.xy, _dnDdy * _CustomDecalNormalTex_ST.xy); \
@@ -247,10 +256,7 @@ float3 DNKW_MatcapLighting(float3 mc, float3 lightColor, float enableLighting, f
         float3 _dnCurTS = mul(fd.TBN, fd.N); \
         float3 _dnBlend = lilBlendNormal(_dnCurTS, _dnNTS); \
         fd.N            = normalize(mul(_dnBlend, fd.TBN)); \
-        fd.reflectionN  = fd.N; \
-        fd.matcapN      = fd.N; \
-        fd.matcap2ndN   = fd.N; \
-        fd.uvMat        = mul(fd.cameraMatrix, fd.N).xy * 0.5 + 0.5; \
+        DNKW_REFRESH_NORMAL_DERIVED \
     }
 
 // BEFORE_REFLECTION - 2nd Reflection
@@ -280,9 +286,8 @@ float3 DNKW_MatcapLighting(float3 mc, float3 lightColor, float enableLighting, f
             _r2Spec2 = lerp(step(0.5, _r2Spec2), _r2Spec2, _CustomRefl2ndBlur); \
             _r2Out = (_CustomRefl2ndColor.rgb * _r2Spec1 + _CustomRefl2ndAnisoSecondaryColor.rgb * _r2Spec2 * _CustomRefl2ndAnisoSecondaryStrength) * _CustomRefl2ndStrength * _r2Mask * _r2Shadow * fd.lightColor; \
         } else { \
-            float3 _r2L0, _r2L1r, _r2L1g, _r2L1b; \
-            LightVolumeSH(fd.positionWS, _r2L0, _r2L1r, _r2L1g, _r2L1b); \
-            float3 _r2Spec = LightVolumeSpecular(float3(1.0, 1.0, 1.0), _CustomRefl2ndSmoothness, 1.0, _r2N, fd.V, _r2L0, _r2L1r, _r2L1g, _r2L1b); \
+            /* Light volume / light probe specular. Returns 0 in ForwardAdd (see the function). */ \
+            float3 _r2Spec = DNKW_Refl2ndLVSpecular(fd.positionWS, _CustomRefl2ndSmoothness, _r2N, fd.V); \
             /* Direct-light Blinn-Phong blend: supplements LV when no volume is present in scene. */ \
             float  _r2BPShin = exp2(_CustomRefl2ndSmoothness * 10.0 + 1.0); \
             float3 _r2BPH    = normalize(fd.L + fd.V); \
@@ -341,11 +346,11 @@ float3 DNKW_MatcapLighting(float3 mc, float3 lightColor, float enableLighting, f
         float  _dInBounds = step(0.0, _dnkw_decalUV.x) * step(_dnkw_decalUV.x, 1.0) \
                           * step(0.0, _dnkw_decalUV.y) * step(_dnkw_decalUV.y, 1.0); \
         /* Mask sampled in decal UV space → scales/moves/rotates with the decal. */ \
-        float  _dMaskTex  = LIL_SAMPLE_2D_GRAD(_CustomDecalMaskTex, sampler_linear_repeat, _dnkw_decalUV, _dnkw_decalDdx, _dnkw_decalDdy).r; \
+        float  _dMaskTex  = LIL_SAMPLE_2D_GRAD(_CustomDecalMaskTex, lil_sampler_linear_clamp, _dnkw_decalUV, _dnkw_decalDdx, _dnkw_decalDdy).r; \
         _dnkw_decalMask   = _dInBounds * _dMaskTex; \
     } \
     if (_CustomDecalEnabled > 0.5) { \
-        float4 _dTex    = LIL_SAMPLE_2D_GRAD(_CustomDecalTex, sampler_linear_repeat, _dnkw_decalUV, _dnkw_decalDdx, _dnkw_decalDdy); \
+        float4 _dTex    = LIL_SAMPLE_2D_GRAD(_CustomDecalTex, lil_sampler_linear_clamp, _dnkw_decalUV, _dnkw_decalDdx, _dnkw_decalDdy); \
         float  _dShadow = lerp(1.0, fd.shadowmix, _CustomDecalShadowDisable); \
         float  _dAlpha  = _dTex.a * _CustomDecalAlpha * _dnkw_decalMask * _dShadow; \
         float3 _dColor  = _dTex.rgb * _CustomDecalColor.rgb; \

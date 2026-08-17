@@ -5,6 +5,10 @@
         // which keeps the total texture-parameter count safely under the GPU's 64 limit.
         [NoScaleOffset][HideInInspector] _CustomMaskPacked ("Packed Mask", 2D) = "white" {}
 
+        // [NoScaleOffset] on the mask slots below is deliberate: the shader samples those channels
+        // of _CustomMaskPacked at the raw mesh UV0, so a tiling/offset would silently do nothing.
+        // Reflection 2nd's mask is the one exception — its _ST IS applied in custom.hlsl.
+
         //----------------------------------------------------------------------------------------------------------------------
         // Reflection 2nd
         _CustomRefl2ndEnabled ("Enable Reflection 2nd", Float) = 0
@@ -28,7 +32,7 @@
         // Rim 2nd
         _CustomRim2ndEnabled ("Enable Rim 2nd", Float) = 0
         _CustomRim2ndColor ("Rim 2nd Color", Color) = (1, 1, 1, 1)
-        _CustomRim2ndMaskTex ("Rim 2nd Mask", 2D) = "white" {}
+        [NoScaleOffset] _CustomRim2ndMaskTex ("Rim 2nd Mask", 2D) = "white" {}
         _CustomRim2ndPower ("Rim 2nd Power", Range(0.1, 8)) = 3
         _CustomRim2ndStrength ("Rim 2nd Strength", Range(0, 1)) = 0.5
         _CustomRim2ndMainColorStrength ("Rim 2nd Main Color Strength", Range(0, 1)) = 0
@@ -42,7 +46,7 @@
         [HideInInspector] _CustomNormal3rdUIEnabled ("Enable Normal Map 3rd", Float) = 0
         _CustomNormal3rdEnabled ("Enable Normal Map 3rd", Float) = 0
         _CustomNormal3rdTex ("Normal Map 3rd", 2D) = "bump" {}
-        _CustomNormal3rdMaskTex ("Normal Map 3rd Mask", 2D) = "white" {}
+        [NoScaleOffset] _CustomNormal3rdMaskTex ("Normal Map 3rd Mask", 2D) = "white" {}
         _CustomNormal3rdStrength ("Normal Map 3rd Strength", Range(0, 1)) = 0.5
 
         //----------------------------------------------------------------------------------------------------------------------
@@ -50,7 +54,7 @@
         _CustomMain4thEnabled ("Enable Main Color 4th", Float) = 0
         [HDR] _CustomMain4thColor ("Main Color 4th Color", Color) = (1, 1, 1, 1)
         _CustomMain4thTex ("Main Color 4th Texture", 2D) = "white" {}
-        _CustomMain4thMaskTex ("Main Color 4th Mask", 2D) = "white" {}
+        [NoScaleOffset] _CustomMain4thMaskTex ("Main Color 4th Mask", 2D) = "white" {}
         _CustomMain4thTex_UVMode ("Main Color 4th UV Mode", Float) = 0
         _CustomMain4thTexBlendMode ("Main Color 4th Blend Mode", Float) = 0
         _CustomMain4thTexAlphaMode ("Main Color 4th Alpha Mode", Float) = 0

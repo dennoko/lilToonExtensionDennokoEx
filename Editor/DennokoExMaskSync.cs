@@ -71,16 +71,42 @@ namespace Dennokoworks
         public static bool IsDennokoEx(Material m)
             => m != null && m.shader != null && m.shader.name.Contains("dennokoworks/DennokoEx");
 
+        // A material can only be previewed while its current shader actually declares the packed-mask
+        // property. This must be checked before ANY Get/SetTexture(_CustomMaskPacked) call: Unity logs
+        //   "Material 'X' with Shader 'Y' doesn't have a texture property '_CustomMaskPacked'"
+        // for every such call on a foreign shader, which spammed the Console once per self-heal tick
+        // after a material was switched back from DennokoEx to plain lilToon.
+        static bool CanPreview(Material m)
+            => IsDennokoEx(m) && m.HasProperty(DennokoExMaskPacker.PackedProp);
+
+        // Stop tracking a material (destroyed, or its shader was switched away from DennokoEx) and
+        // release the in-memory preview texture. Deliberately does NOT write to the material: the
+        // property no longer exists there, so clearing it is both impossible and unnecessary — the
+        // leftover _CustomMaskPacked entry in the material's saved properties is inert for other
+        // shaders and is removed by lilToon's "Remove unused properties".
+        static void Forget(Material m)
+        {
+            if (_preview.TryGetValue(m, out var tex) && tex != null) Object.DestroyImmediate(tex);
+            _preview.Remove(m);
+            _sig.Remove(m);
+            _healStrikes.Remove(m);
+            _healMuteUntil.Remove(m);
+        }
+
         static void OnUpdate()
         {
             if (Busy) return;
 
-            // (a) One-shot full rebuild after a domain reload (waits here until the editor is idle).
+            // (a) One-shot rebuild after a domain reload (waits here until the editor is idle).
+            //     Scene materials only: a project-wide FindAssets("t:Material") + LoadAssetAtPath
+            //     stalls the editor for seconds on every recompile in a project with thousands of
+            //     materials, and a material that is not in a loaded scene is not being looked at.
+            //     Materials opened in the inspector are covered by EnsurePreview() instead.
             if (_pendingFullSync)
             {
                 _pendingFullSync = false;
-                _pendingSceneSync = false; // full scan already covers everything in scenes
-                SyncAll();
+                _pendingSceneSync = false;
+                SyncLoadedScenes();
                 _nextHealTime = EditorApplication.timeSinceStartup + HealInterval;
                 return;
             }
@@ -102,7 +128,9 @@ namespace Dennokoworks
             foreach (var kv in _preview.ToList())
             {
                 var m = kv.Key;
-                if (m == null) { _preview.Remove(m); _healStrikes.Remove(m); _healMuteUntil.Remove(m); continue; }
+                // Destroyed material, or its shader is no longer DennokoEx (the user switched the
+                // material back to plain lilToon): drop it before touching the packed-mask property.
+                if (!CanPreview(m)) { Forget(m); continue; }
 
                 // Preview still assigned -> healthy. Clear any strike history.
                 if (m.GetTexture(DennokoExMaskPacker.PackedProp) == kv.Value) { _healStrikes.Remove(m); continue; }
@@ -130,6 +158,8 @@ namespace Dennokoworks
             }
         }
 
+        // Project-wide rebuild. Expensive (loads every material in the project), so it is NOT run
+        // automatically — kept for manual/explicit use.
         public static void SyncAll()
         {
             if (Busy) return;
@@ -164,22 +194,29 @@ namespace Dennokoworks
             catch (System.Exception e) { Debug.LogException(e); }
         }
 
-        // Manual refresh: drop cached state for the material and re-bake unconditionally.
+        // Manual refresh: drop cached state for the material (this also clears any loop-guard mute)
+        // and re-bake unconditionally.
         public static void ForceSync(Material m)
         {
             if (m == null) return;
-            if (_preview.TryGetValue(m, out var old) && old != null) Object.DestroyImmediate(old);
-            _preview.Remove(m);
-            _sig.Remove(m);
-            _healStrikes.Remove(m);   // manual refresh clears any loop-guard mute
-            _healMuteUntil.Remove(m);
+            Forget(m);
+            Sync(m);
+        }
+
+        // Bake the preview only if this material is not previewed yet. Cheap enough to call from
+        // OnGUI: it never hashes the mask textures unless a bake is actually needed. Covers the case
+        // where a material was just switched TO DennokoEx, which no other trigger notices.
+        public static void EnsurePreview(Material m)
+        {
+            if (m == null || _preview.ContainsKey(m)) return;
             Sync(m);
         }
 
         public static void Sync(Material m)
         {
             if (Busy) return;
-            if (!IsDennokoEx(m) || !m.HasProperty(DennokoExMaskPacker.PackedProp)) return;
+            if (m == null) return;
+            if (!CanPreview(m)) { Forget(m); return; }
 
             string sig = DennokoExMaskPacker.NeedsPacking(m) ? Signature(m) : "none";
 

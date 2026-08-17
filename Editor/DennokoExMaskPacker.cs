@@ -1,4 +1,5 @@
 #if UNITY_EDITOR
+using UnityEditor;
 using UnityEngine;
 
 namespace Dennokoworks
@@ -39,7 +40,14 @@ namespace Dennokoworks
 
         // Bakes a packed RGBA Texture2D from the material's four mask slots. Returns null if there is
         // nothing to pack (all slots empty) — in that case the shader's "white" default is correct.
-        public static Texture2D Bake(Material m)
+        //
+        // forBuild: the texture will be shipped on the avatar, so it is block-compressed. An
+        // uncompressed 2048^2 RGBA32 mask costs ~16.8 MB of VRAM per material and counts fully
+        // against VRChat's texture budget; BC7 / ASTC brings that to ~1/4 with mipmaps included.
+        // The editor preview passes false: compression costs seconds per bake and never ships.
+        // Mipmaps are always generated — without them the mask aliases/shimmers at distance and the
+        // GPU always fetches the full-resolution texture.
+        public static Texture2D Bake(Material m, bool forBuild = false)
         {
             if (!NeedsPacking(m)) return null;
 
@@ -74,10 +82,11 @@ namespace Dennokoworks
             {
                 Graphics.Blit(null, rt, mat);
                 RenderTexture.active = rt;
-                result = new Texture2D(size, size, TextureFormat.RGBA32, false, /*linear*/ true);
+                result = new Texture2D(size, size, TextureFormat.RGBA32, /*mipChain*/ true, /*linear*/ true);
                 result.ReadPixels(new Rect(0, 0, size, size), 0, 0, false);
-                result.Apply(false, false);
+                result.Apply(/*updateMipmaps*/ true, false);
                 result.name = m.name + "_DnkwPackedMask";
+                if (forBuild) Compress(result);
             }
             finally
             {
@@ -86,6 +95,29 @@ namespace Dennokoworks
                 Object.DestroyImmediate(mat);
             }
             return result;
+        }
+
+        // Block-compress in place for the build. BC7 is used on PC rather than DXT5 because the four
+        // channels hold four UNRELATED masks: DXT5 encodes RGB along a single line per 4x4 block, so
+        // independent R/G/B masks bleed into each other, while BC7's partition modes keep them apart.
+        // Mobile (Quest) has no BC7, so ASTC 6x6 is used there. If the platform format is unavailable
+        // the texture is simply left uncompressed rather than corrupted.
+        static void Compress(Texture2D tex)
+        {
+            var target = EditorUserBuildSettings.activeBuildTarget;
+            bool mobile = target == BuildTarget.Android || target == BuildTarget.iOS;
+            var format = mobile ? TextureFormat.ASTC_6x6 : TextureFormat.BC7;
+            // Only the desktop format is checked against the editor's GPU: the mobile format is
+            // encoded on the CPU for a device this machine does not have to be able to sample.
+            if (!mobile && !SystemInfo.SupportsTextureFormat(format)) return;
+            try
+            {
+                EditorUtility.CompressTexture(tex, format, TextureCompressionQuality.Normal);
+            }
+            catch (System.Exception e)
+            {
+                Debug.LogWarning($"[DennokoEx] Packed mask compression to {format} failed, shipping it uncompressed. {e.Message}");
+            }
         }
 
         static Texture Get(Material m, string prop)
