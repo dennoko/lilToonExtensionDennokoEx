@@ -164,10 +164,13 @@ float3 DNKW_DecalBlend(float3 base, float3 overlay, float alpha, float mode)
 //       blend mode (lilBlendColor: 0=Normal,1=Add,2=Screen,3=Multiply),
 //       alpha mode (0=Off,1=Replace,2=Multiply,3=Add,4=Subtract).
 //
-// Mask: the draw range is gated by an INDEPENDENT mask texture authored via the
+// Weight: the blend weight is _CustomMain4thTex.a * _CustomMain4thColor.a * mask, matching lilToon
+// Main 2nd/3rd (which multiply color and texture as full float4s). A transparent main texture
+// therefore fades the layer per-pixel by its own alpha.
+//
+// Mask: on top of that, the draw range is gated by an INDEPENDENT mask texture authored via the
 // _CustomMain4thMaskTex slot and baked into _CustomMaskPacked.a (sampled at fd.uv0, mesh UV).
-// The color blend weight is mask * _CustomMain4thColor.a; the main texture's own alpha is NOT
-// used as the range. Default packed mask is white (.a = 1) so an unmasked layer covers fully.
+// Default packed mask is white (.a = 1) so an unmasked layer covers fully.
 //
 // AlphaMode writes fd.col.a unconditionally: lilToon guards it with #if LIL_RENDER!=0, but #if
 // is illegal inside a macro body. In opaque passes fd.col.a is unused at output and cutout
@@ -184,9 +187,10 @@ float3 DNKW_DecalBlend(float3 base, float3 overlay, float alpha, float mode)
         if(_CustomMain4thTex_UVMode == 3) _m4UV = fd.uv3; \
         if(_CustomMain4thTex_UVMode == 4) _m4UV = fd.uvMat; \
         _m4UV = _m4UV * _CustomMain4thTex_ST.xy + _CustomMain4thTex_ST.zw; \
-        float3 _m4rgb  = _CustomMain4thColor.rgb * LIL_SAMPLE_2D(_CustomMain4thTex, sampler_linear_repeat, _m4UV).rgb; \
+        float4 _m4Tex  = LIL_SAMPLE_2D(_CustomMain4thTex, sampler_linear_repeat, _m4UV); \
+        float3 _m4rgb  = _CustomMain4thColor.rgb * _m4Tex.rgb; \
         float  _m4Mask = LIL_SAMPLE_2D(_CustomMaskPacked, sampler_linear_repeat, fd.uv0).a; \
-        float  _m4a    = _CustomMain4thColor.a * _m4Mask; \
+        float  _m4a    = _CustomMain4thColor.a * _m4Tex.a * _m4Mask; \
         if(_CustomMain4thTexAlphaMode != 0) { \
             if(_CustomMain4thTexAlphaMode == 1) fd.col.a = _m4a; \
             if(_CustomMain4thTexAlphaMode == 2) fd.col.a = fd.col.a * _m4a; \
