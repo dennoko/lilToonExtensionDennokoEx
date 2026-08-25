@@ -41,9 +41,10 @@ namespace Dennokoworks
         // Bakes a packed RGBA Texture2D from the material's four mask slots. Returns null if there is
         // nothing to pack (all slots empty) — in that case the shader's "white" default is correct.
         //
-        // forBuild: the texture will be shipped on the avatar, so it is block-compressed. An
-        // uncompressed 2048^2 RGBA32 mask costs ~16.8 MB of VRAM per material and counts fully
-        // against VRChat's texture budget; BC7 / ASTC brings that to ~1/4 with mipmaps included.
+        // forBuild: the texture will be shipped on the avatar, so it is block-compressed and marked
+        // for mipmap streaming. An uncompressed 2048^2 RGBA32 mask costs ~16.8 MB of VRAM per
+        // material and counts fully against VRChat's texture budget; BC7 / ASTC brings that to ~1/4
+        // with mipmaps included, and streaming keeps the top mips out of VRAM at distance.
         // The editor preview passes false: compression costs seconds per bake and never ships.
         // Mipmaps are always generated — without them the mask aliases/shimmers at distance and the
         // GPU always fetches the full-resolution texture.
@@ -86,7 +87,7 @@ namespace Dennokoworks
                 result.ReadPixels(new Rect(0, 0, size, size), 0, 0, false);
                 result.Apply(/*updateMipmaps*/ true, false);
                 result.name = m.name + "_DnkwPackedMask";
-                if (forBuild) Compress(result);
+                if (forBuild) { Compress(result); ConfigureForStreaming(result); }
             }
             finally
             {
@@ -118,6 +119,36 @@ namespace Dennokoworks
             {
                 Debug.LogWarning($"[DennokoEx] Packed mask compression to {format} failed, shipping it uncompressed. {e.Message}");
             }
+        }
+
+        // Marks the baked mask for VRChat's mipmap streaming and drops its CPU-side copy from the
+        // build. Both live only in the serialized object: Texture2D.streamingMipmaps is get-only in
+        // the scripting API, and a texture baked at build time has no TextureImporter behind it to
+        // set them the normal way, so the fields are written the same way NDMF's CheckMipStreamingPass
+        // reads them back. Without this the mask is never streamed — it stays resident at full
+        // resolution however far away the avatar is — and NDMF reports it as a bug in the tool that
+        // generated the texture.
+        //
+        // m_IsReadable is cleared rather than calling Apply(_, makeNoLongerReadable: true), which
+        // would free the system-memory copy before the texture has been serialized into the build.
+        static void ConfigureForStreaming(Texture2D tex)
+        {
+            var so = new SerializedObject(tex);
+            var streaming = so.FindProperty("m_StreamingMipmaps");
+            // A future Unity could rename these; leave the texture untouched rather than half-set.
+            if (streaming == null) return;
+            streaming.boolValue = true;
+
+            var priority = so.FindProperty("m_StreamingMipmapsPriority");
+            if (priority != null) priority.intValue = 0;
+
+            // The mask is only ever sampled by the GPU, and a Read/Write enabled texture is excluded
+            // from streaming besides.
+            var readable = so.FindProperty("m_IsReadable");
+            if (readable != null) readable.boolValue = false;
+
+            // Without undo: this runs on a throwaway object during the build.
+            so.ApplyModifiedPropertiesWithoutUndo();
         }
 
         static Texture Get(Material m, string prop)
