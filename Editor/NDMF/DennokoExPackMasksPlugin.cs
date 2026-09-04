@@ -42,14 +42,45 @@ namespace Dennokoworks
 
                         if (!clones.TryGetValue(m, out var clone))
                         {
-                            // forBuild: mipmapped + block compressed, this one ships on the avatar.
-                            var packed = DennokoExMaskPacker.Bake(m, forBuild: true);
-                            if (packed == null) { clones[m] = null; continue; }
+                            // Normally the editor has already written a packed PNG asset and the material
+                            // points at it, so the build just ships that file - no bake, no upload delay.
+                            //
+                            // It is only trusted when the packer's recorded signature still matches the
+                            // material's mask slots. The slots are ordinary user-facing properties: another
+                            // tool, a script, or a material copied around can change them without the
+                            // DennokoEx inspector ever running, which would leave the PNG stale. Since the
+                            // slots are stripped just below, shipping a stale mask would be unrecoverable,
+                            // so anything not provably current is re-baked here.
+                            Texture2D packed = null;
+                            if (!DennokoExMaskPacker.IsPackedMaskUpToDate(m))
+                            {
+                                // forBuild: mipmapped + block compressed, this one ships on the avatar.
+                                packed = DennokoExMaskPacker.Bake(m, forBuild: true);
+                                if (packed == null)
+                                {
+                                    // Packing is impossible (the packer shader is missing). Leave the
+                                    // material untouched rather than stripping the masks it still needs.
+                                    clones[m] = null;
+                                    continue;
+                                }
+                            }
 
                             clone = new Material(m) { name = m.name + " (DnkwPacked)" };
-                            clone.SetTexture(DennokoExMaskPacker.PackedProp, packed);
+                            if (packed != null)
+                            {
+                                clone.SetTexture(DennokoExMaskPacker.PackedProp, packed);
+                                ctx.AssetSaver.SaveAsset(packed);
+                            }
 
-                            ctx.AssetSaver.SaveAsset(packed);
+                            // The four slot textures are never sampled by the shader - only _CustomMaskPacked
+                            // is - but Unity still pulls them into the build because the material references
+                            // them. Dropping them here saves both build size and VRAM. Their _ST tiling stays
+                            // on the material, which is what the shader actually reads.
+                            foreach (var p in DennokoExMaskPacker.SourceProps)
+                            {
+                                if (clone.HasProperty(p)) clone.SetTexture(p, null);
+                            }
+
                             ctx.AssetSaver.SaveAsset(clone);
                             clones[m] = clone;
                         }

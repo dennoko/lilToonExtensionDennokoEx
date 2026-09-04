@@ -204,7 +204,7 @@ namespace Dennokoworks
             foreach (var t0 in m_MaterialEditor.targets)
                 if (t0 is Material m0) DennokoExMaskSync.EnsurePreview(m0);
 
-            // Manual mask-preview refresh (re-bakes the in-memory _CustomMaskPacked for these materials).
+            // Manual mask re-pack button (re-bakes and saves the persistent PNG asset unconditionally).
             if (GUILayout.Button(Loc("btn_refresh_mask_preview")))
                 foreach (var t in m_MaterialEditor.targets)
                     if (t is Material mm) DennokoExMaskSync.ForceSync(mm);
@@ -217,7 +217,10 @@ namespace Dennokoworks
             DrawNormal3rd();
             DrawDecal();
 
-            // Rebuild the in-memory packed-mask preview when any mask slot may have changed.
+            // Rebuild the packed mask when any mask slot may have changed. Deliberately covers the whole
+            // section rather than just the mask object fields: a section paste writes mask slots without
+            // going through their own change check. Sync() is deferred and skips the bake entirely when
+            // the packed asset already matches the slots, so the calls a slider drag makes cost nothing.
             if (EditorGUI.EndChangeCheck())
                 foreach (var t in m_MaterialEditor.targets)
                     if (t is Material mm) DennokoExMaskSync.Sync(mm);
