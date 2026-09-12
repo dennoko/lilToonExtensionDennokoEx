@@ -32,18 +32,38 @@ namespace Dennokoworks
         const int MaxSize = 2048;
         const int MinSize = 4;
 
-        // Written to the generated texture's importer userData so we can tell our own output apart
-        // from a texture the user authored, or from a copy owned by a different material.
-        // Layout: "<OwnerMarkerPrefix>|<GlobalObjectId>#<source signature>"
-        //   - the part before '#' identifies the owning material (see BuildOwnerMarker)
-        //   - the part after '#' records which source masks the file was baked from (see SourceSignature),
-        //     so both the inspector and the build pass can tell a stale file from a current one without
-        //     re-baking. It has to live on the asset because an in-memory cache does not survive a
-        //     domain reload, and the build pass runs in a fresh one.
-        const string OwnerMarkerPrefix = "DennokoExPackedMask";
+        // Packed masks are CONTENT-ADDRESSED: the file name is a hash of the source masks it was baked
+        // from, and every material with that same set of masks references the same file.
+        //
+        // The alternative - one file per material, named after it - was what produced the duplication
+        // this replaced: duplicating a material (the normal way to make a colour variant) produced a
+        // byte-identical second file, and the generated files scattered across whatever folder each
+        // material's _MainTex happened to live in. Content addressing removes both: identical masks
+        // collapse to one file no matter how many materials use them, and there is a single folder to
+        // look at. Nothing is ever overwritten in place - a different mask set is a different path -
+        // so a file shared by ten materials can never be changed out from under nine of them.
+        //
+        // Files left unreferenced by an edit are collected by CleanUpUnusedMasks.
+        const string GeneratedRoot   = "Assets/DennokoEx Generated";
+        const string GeneratedMasks  = GeneratedRoot + "/Masks";
+
+        // Written to the generated texture's importer userData, as "<MarkerPrefix>|<layout>#<signature>":
+        //   * the prefix marks the file as ours, so the cleanup pass can tell a generated mask from a
+        //     texture the user authored and never deletes the latter;
+        //   * the layout version invalidates every file at once if the channel packing ever changes;
+        //   * the signature records which source masks it was baked from, so the inspector and the build
+        //     pass can tell a current file from a stale one without re-baking. It has to live on the
+        //     asset because an in-memory cache does not survive a domain reload, and the build pass runs
+        //     in a fresh one.
+        const string MarkerPrefix = "DennokoExPackedMask";
+        const int    LayoutVersion = 1;
         const char   UserDataSigSeparator = '#';
 
-        const string MigrationPrefPrefix = "DennokoEx_MaskMigration_v2_";
+        static string Marker => MarkerPrefix + "|" + LayoutVersion;
+
+        // Bumped when the migration needs to run again on a project it has already visited - here,
+        // because packed masks moved from one-file-per-material to the content-addressed folder.
+        const string MigrationPrefPrefix = "DennokoEx_MaskMigration_v3_";
 
         // Hash128.Compute is deterministic across sessions and runtimes; string.GetHashCode is not
         // guaranteed to be (it is randomized per process on CoreCLR), which would silently re-run the
@@ -92,8 +112,8 @@ namespace Dennokoworks
             if (m == null || !m.HasProperty(PackedProp)) return false;
             var packed = m.GetTexture(PackedProp);
             if (packed == null) return !NeedsPacking(m);
-            if (!TryReadUserData(packed, out var marker, out var sig)) return false;
-            return marker == BuildOwnerMarker(m) && sig == SourceSignature(m);
+            if (!NeedsPacking(m)) return false;
+            return ReadUserData(packed) == BuildUserData(SourceSignature(m));
         }
 
         /// <summary>
@@ -118,45 +138,40 @@ namespace Dennokoworks
 
             if (!NeedsPacking(owner))
             {
-                // If there's an existing generated mask owned by this material, clear it
+                // Drop our own reference; a texture the user assigned by hand is left alone.
                 var existing = owner.GetTexture(PackedProp);
-                if (existing != null && IsGeneratedMask(existing, owner))
+                if (existing != null && IsGeneratedMask(existing))
                 {
                     if (recordUndo) Undo.RecordObject(owner, $"Clear {PackedProp}");
                     owner.SetTexture(PackedProp, null);
                     EditorUtility.SetDirty(owner);
                 }
-                // The generated file itself is deliberately left on disk: deleting it here would leave a
-                // dangling reference if the user undoes the mask removal.
+                // The generated file is deliberately left on disk: other materials may still reference
+                // it, and even if none do, deleting it here would leave a dangling reference the moment
+                // the user undoes the mask removal. CleanUpUnusedMasks collects it later.
                 return null;
             }
 
-            var bakedTex = Bake(owner, forBuild: false);
-            if (bakedTex == null) return null;
-
-            string ownerMarker = BuildOwnerMarker(owner);
-            string userData   = ownerMarker + UserDataSigSeparator + SourceSignature(owner);
+            string userData   = BuildUserData(SourceSignature(owner));
             string targetPath = null;
+            // Initialised: C# does not treat a value assigned inside a try as definitely assigned
+            // afterwards, even when every catch returns.
+            Texture2D savedTexture = null;
 
             try
             {
-                targetPath = ResolveTargetPath(owner, ownerMarker);
+                targetPath = ResolveTargetPath(userData);
                 if (string.IsNullOrEmpty(targetPath)) return null;
 
-                byte[] pngBytes = bakedTex.EncodeToPNG();
-
-                string fullSystemPath = Path.GetFullPath(Path.Combine(Directory.GetCurrentDirectory(), targetPath));
-                Directory.CreateDirectory(Path.GetDirectoryName(fullSystemPath));
-                File.WriteAllBytes(fullSystemPath, pngBytes);
-
-                AssetDatabase.ImportAsset(targetPath, ImportAssetOptions.ForceUpdate | ImportAssetOptions.ForceSynchronousImport);
-
-                // Reimport a second time only when the importer actually needs changing, i.e. on first
-                // creation or when the recorded source signature moved on.
-                var importer = AssetImporter.GetAtPath(targetPath) as TextureImporter;
-                if (importer != null && ApplyImportSettings(importer, userData))
+                // Content-addressed: a file already sitting on this path was baked from exactly these
+                // source masks, so another material has done the work already. Reference it and stop -
+                // no bake, no PNG write, no reimport. This is what collapses duplicated materials onto
+                // a single shared file.
+                savedTexture = force ? null : LoadIfMatches(targetPath, userData);
+                if (savedTexture == null)
                 {
-                    importer.SaveAndReimport();
+                    savedTexture = BakeAndWrite(owner, targetPath, userData);
+                    if (savedTexture == null) return null;
                 }
             }
             catch (System.Exception e)
@@ -164,13 +179,6 @@ namespace Dennokoworks
                 Debug.LogError($"[DennokoEx] Failed to write packed mask '{targetPath ?? "(path unresolved)"}': {e}");
                 return null;
             }
-            finally
-            {
-                Object.DestroyImmediate(bakedTex);
-            }
-
-            var savedTexture = AssetDatabase.LoadAssetAtPath<Texture2D>(targetPath);
-            if (savedTexture == null) return null;
 
             foreach (var target in assignTargets ?? new[] { owner })
             {
@@ -185,31 +193,68 @@ namespace Dennokoworks
         }
 
         /// <summary>
-        /// True when the texture is a packed mask this material generated, and is therefore safe to overwrite.
+        /// True when the texture is a packed mask DennokoEx generated, rather than one the user assigned
+        /// by hand. Generated files are shared between materials, so this deliberately says nothing about
+        /// which material produced it - only that it is ours, and that dropping a reference to it loses
+        /// nothing the user authored.
         /// </summary>
-        public static bool IsGeneratedMask(Texture texture, Material owner)
+        public static bool IsGeneratedMask(Texture texture) => ReadUserData(texture) != null;
+
+        static string BuildUserData(string signature) => Marker + UserDataSigSeparator + signature;
+
+        // Returns the full userData of a generated mask, or null when the texture is not one of ours.
+        static string ReadUserData(Texture texture)
         {
-            if (texture == null || owner == null) return false;
-            return TryReadUserData(texture, out var marker, out _) && marker == BuildOwnerMarker(owner);
+            if (texture == null) return null;
+            string path = AssetDatabase.GetAssetPath(texture);
+            return IsWritableAssetPath(path) ? ReadUserDataAtPath(path) : null;
         }
 
-        // Splits a generated mask's importer userData into its owner marker and source signature.
-        // Files written before the signature was introduced carry the marker alone; they are reported
-        // with an empty signature, which reads as "stale" and simply triggers one re-bake.
-        static bool TryReadUserData(Texture texture, out string marker, out string signature)
+        // Deliberately matches on MarkerPrefix rather than the full Marker: a file written by an older
+        // layout version is still ours, and still something the cleanup pass should be able to collect.
+        static string ReadUserDataAtPath(string path)
         {
-            marker = signature = null;
-            if (texture == null) return false;
-            string path = AssetDatabase.GetAssetPath(texture);
-            if (!IsWritableAssetPath(path)) return false;
             var importer = AssetImporter.GetAtPath(path) as TextureImporter;
-            if (importer == null || string.IsNullOrEmpty(importer.userData)) return false;
-            if (!importer.userData.StartsWith(OwnerMarkerPrefix, System.StringComparison.Ordinal)) return false;
+            var data = importer != null ? importer.userData : null;
+            return !string.IsNullOrEmpty(data)
+                   && data.StartsWith(MarkerPrefix, System.StringComparison.Ordinal)
+                ? data : null;
+        }
 
-            int cut = importer.userData.IndexOf(UserDataSigSeparator);
-            marker    = cut < 0 ? importer.userData : importer.userData.Substring(0, cut);
-            signature = cut < 0 ? string.Empty      : importer.userData.Substring(cut + 1);
-            return true;
+        // Loads the asset at a content-addressed path when it carries exactly the expected userData.
+        // Anything else - missing, user-authored, an older layout version - returns null so the caller bakes.
+        static Texture2D LoadIfMatches(string path, string expectedUserData)
+            => ReadUserDataAtPath(path) == expectedUserData
+                ? AssetDatabase.LoadAssetAtPath<Texture2D>(path)
+                : null;
+
+        static Texture2D BakeAndWrite(Material owner, string targetPath, string userData)
+        {
+            var bakedTex = Bake(owner, forBuild: false);
+            if (bakedTex == null) return null;
+            try
+            {
+                byte[] pngBytes = bakedTex.EncodeToPNG();
+
+                string fullSystemPath = Path.GetFullPath(Path.Combine(Directory.GetCurrentDirectory(), targetPath));
+                Directory.CreateDirectory(Path.GetDirectoryName(fullSystemPath));
+                File.WriteAllBytes(fullSystemPath, pngBytes);
+
+                AssetDatabase.ImportAsset(targetPath, ImportAssetOptions.ForceUpdate | ImportAssetOptions.ForceSynchronousImport);
+
+                // Reimport a second time only when the importer actually needs changing, i.e. on the
+                // first creation of this content hash.
+                var importer = AssetImporter.GetAtPath(targetPath) as TextureImporter;
+                if (importer != null && ApplyImportSettings(importer, userData))
+                {
+                    importer.SaveAndReimport();
+                }
+            }
+            finally
+            {
+                Object.DestroyImmediate(bakedTex);
+            }
+            return AssetDatabase.LoadAssetAtPath<Texture2D>(targetPath);
         }
 
         // Below this many materials the migration finishes fast enough that a progress bar would only
@@ -232,9 +277,10 @@ namespace Dennokoworks
                 foreach (var g in guids)
                 {
                     var path = AssetDatabase.GUIDToAssetPath(g);
-                    if (!IsWritableAssetPath(path)) continue;
+                    if (!IsAuthoredMaterialPath(path)) continue;
                     var m = AssetDatabase.LoadAssetAtPath<Material>(path);
-                    if (m == null || m.shader == null || !m.shader.name.Contains("dennokoworks/DennokoEx")) continue;
+                    if (m == null || !AssetDatabase.IsMainAsset(m)) continue;
+                    if (m.shader == null || !m.shader.name.Contains("dennokoworks/DennokoEx")) continue;
                     if (!NeedsPacking(m)) continue;
                     if (!force && IsPackedMaskUpToDate(m)) continue;
                     targets.Add(m);
@@ -258,7 +304,9 @@ namespace Dennokoworks
                 if (count > 0)
                 {
                     AssetDatabase.SaveAssets();
-                    Debug.Log($"[DennokoEx] Batch packed masks for {count} material(s).");
+                    Debug.Log($"[DennokoEx] Batch packed masks for {count} material(s). " +
+                              "Packed masks written by an earlier version are no longer referenced; " +
+                              "Window > DennokoEx > Clean Up Unused Masks removes them.");
                 }
             }
             finally
@@ -269,6 +317,132 @@ namespace Dennokoworks
                 SetMigrated(true);
             }
             return count;
+        }
+
+        /// <summary>
+        /// Deletes generated packed masks that nothing references any more.
+        /// </summary>
+        /// <remarks>
+        /// Packed masks are derived data, so an unreferenced one carries no information - but they are
+        /// still ordinary files in the user's project, so this only ever deletes a texture whose importer
+        /// userData marks it as ours. Anything the user authored is invisible to it, whatever it is named
+        /// or wherever it sits.
+        ///
+        /// Two things leave files behind: switching a material to a different set of source masks (the
+        /// content hash changes, so a new file is written and the old one may be left with no referrers),
+        /// and the move to content addressing, which strands every per-material file an earlier version
+        /// wrote next to its material.
+        /// </remarks>
+        /// <param name="interactive">Ask before deleting and report the result in a dialog.</param>
+        /// <returns>Number of files deleted.</returns>
+        public static int CleanUpUnusedMasks(bool interactive = true)
+        {
+            try
+            {
+                var candidates = CollectGeneratedMasks();
+                if (candidates.Count == 0)
+                {
+                    if (interactive) EditorUtility.DisplayDialog("DennokoEx", "No generated masks found.", "OK");
+                    return 0;
+                }
+
+                var referenced = CollectReferencedAssets();
+
+                var unused = new List<string>();
+                long bytes = 0;
+                foreach (var path in candidates)
+                {
+                    if (referenced.Contains(path)) continue;
+                    unused.Add(path);
+                    try { bytes += new FileInfo(path).Length; } catch { }
+                }
+
+                if (unused.Count == 0)
+                {
+                    if (interactive)
+                        EditorUtility.DisplayDialog("DennokoEx",
+                            $"All {candidates.Count} generated mask(s) are still in use.", "OK");
+                    return 0;
+                }
+
+                if (interactive)
+                {
+                    string preview = string.Join("\n", unused.GetRange(0, Mathf.Min(10, unused.Count)).ToArray());
+                    if (unused.Count > 10) preview += $"\n... and {unused.Count - 10} more";
+                    if (!EditorUtility.DisplayDialog("DennokoEx",
+                            $"Delete {unused.Count} unused packed mask(s), freeing {bytes / 1024f / 1024f:0.0} MB?\n\n{preview}",
+                            "Delete", "Cancel"))
+                        return 0;
+                }
+
+                int deleted = 0;
+                foreach (var path in unused)
+                    if (AssetDatabase.DeleteAsset(path)) deleted++;
+
+                AssetDatabase.Refresh();
+                Debug.Log($"[DennokoEx] Deleted {deleted} unused packed mask(s), freeing {bytes / 1024f / 1024f:0.0} MB.");
+
+                if (interactive)
+                    EditorUtility.DisplayDialog("DennokoEx",
+                        $"Deleted {deleted} unused packed mask(s), freeing {bytes / 1024f / 1024f:0.0} MB.", "OK");
+                return deleted;
+            }
+            finally
+            {
+                EditorUtility.ClearProgressBar();
+            }
+        }
+
+        // Every texture in the project carrying our marker. Searched by the folder generated masks live
+        // in plus the legacy file-name pattern, rather than by walking every texture importer in the
+        // project, which takes minutes on an avatar project.
+        static List<string> CollectGeneratedMasks()
+        {
+            var seen = new HashSet<string>();
+            var found = new List<string>();
+
+            void Consider(string path)
+            {
+                if (path == null || !seen.Add(path)) return;
+                if (ReadUserDataAtPath(path) != null) found.Add(path);
+            }
+
+            if (AssetDatabase.IsValidFolder(GeneratedMasks))
+                foreach (var g in AssetDatabase.FindAssets("t:Texture2D", new[] { GeneratedMasks }))
+                    Consider(AssetDatabase.GUIDToAssetPath(g));
+
+            // Written by versions that named the file after its material and put it beside the material.
+            foreach (var g in AssetDatabase.FindAssets("DnkwPackedMask t:Texture2D"))
+                Consider(AssetDatabase.GUIDToAssetPath(g));
+
+            return found;
+        }
+
+        // Asset paths referenced by anything that can hold a texture reference. Non-recursive: a material
+        // asset is scanned in its own right, and a scene or prefab lists the textures its embedded
+        // materials use as direct dependencies, so recursing would only cost time.
+        static HashSet<string> CollectReferencedAssets()
+        {
+            var referenced = new HashSet<string>();
+            var guids = new List<string>();
+            guids.AddRange(AssetDatabase.FindAssets("t:Material"));
+            guids.AddRange(AssetDatabase.FindAssets("t:Prefab"));
+            guids.AddRange(AssetDatabase.FindAssets("t:Scene"));
+
+            for (int i = 0; i < guids.Count; i++)
+            {
+                if ((i & 63) == 0)
+                {
+                    EditorUtility.DisplayProgressBar("DennokoEx",
+                        $"Looking for references ({i + 1}/{guids.Count})...", (float)i / guids.Count);
+                }
+                var path = AssetDatabase.GUIDToAssetPath(guids[i]);
+                if (string.IsNullOrEmpty(path)) continue;
+                foreach (var dep in AssetDatabase.GetDependencies(path, false))
+                    referenced.Add(dep);
+            }
+            EditorUtility.ClearProgressBar();
+            return referenced;
         }
 
         // Bakes a packed RGBA Texture2D from the material's four mask slots. Returns null if there is
@@ -334,40 +508,26 @@ namespace Dennokoworks
             return result;
         }
 
-        static string ResolveTargetPath(Material owner, string ownerMarker)
+        // The path IS the identity: same source masks -> same userData -> same hash -> same file. No
+        // GenerateUniqueAssetPath, because a colliding name here means the exact same content, which is
+        // the sharing we want rather than a conflict to dodge.
+        static string ResolveTargetPath(string userData)
         {
-            if (owner.HasProperty(PackedProp))
-            {
-                var existingTex = owner.GetTexture(PackedProp);
-                if (existingTex != null)
-                {
-                    string existingPath = AssetDatabase.GetAssetPath(existingTex);
-                    if (IsWritableAssetPath(existingPath) && existingPath.EndsWith(".png", System.StringComparison.OrdinalIgnoreCase))
-                    {
-                        if (TryReadUserData(existingTex, out var marker, out _) && marker == ownerMarker)
-                        {
-                            return existingPath;
-                        }
-                    }
-                }
-            }
+            if (!EnsureGeneratedFolder()) return null;
+            return $"{GeneratedMasks}/PackedMask_{Hash128.Compute(userData)}.png";
+        }
 
-            string baseFolder = GetTargetFolder(owner);
-            string maskFolder = Path.Combine(baseFolder, "Mask").Replace("\\", "/");
-            if (!AssetDatabase.IsValidFolder(maskFolder) && AssetDatabase.IsValidFolder(baseFolder))
-            {
-                AssetDatabase.CreateFolder(baseFolder, "Mask");
-            }
+        static bool EnsureGeneratedFolder()
+        {
+            if (AssetDatabase.IsValidFolder(GeneratedMasks)) return true;
+            if (!AssetDatabase.IsValidFolder(GeneratedRoot))
+                AssetDatabase.CreateFolder("Assets", Path.GetFileName(GeneratedRoot));
+            if (AssetDatabase.IsValidFolder(GeneratedRoot))
+                AssetDatabase.CreateFolder(GeneratedRoot, Path.GetFileName(GeneratedMasks));
 
-            string baseFileName = $"{SanitizeFileName(owner.name)}_DnkwPackedMask.png";
-            string candidate = Path.Combine(maskFolder, baseFileName).Replace("\\", "/");
-            if (!IsWritableAssetPath(candidate))
-            {
-                Debug.LogError($"[DennokoEx] Cannot write a packed mask outside of Assets/ ('{candidate}').");
-                return null;
-            }
-
-            return AssetDatabase.GenerateUniqueAssetPath(candidate);
+            if (AssetDatabase.IsValidFolder(GeneratedMasks)) return true;
+            Debug.LogError($"[DennokoEx] Could not create '{GeneratedMasks}'; packed masks cannot be saved.");
+            return false;
         }
 
         static bool ApplyImportSettings(TextureImporter importer, string userData)
@@ -404,48 +564,24 @@ namespace Dennokoworks
             return changed;
         }
 
-        static string BuildOwnerMarker(Material owner)
-        {
-            return $"{OwnerMarkerPrefix}|{GlobalObjectId.GetGlobalObjectIdSlow(owner)}";
-        }
-
         static bool IsWritableAssetPath(string path)
         {
             return !string.IsNullOrEmpty(path) && path.StartsWith("Assets/", System.StringComparison.Ordinal);
         }
 
-        static string SanitizeFileName(string name)
-        {
-            if (string.IsNullOrEmpty(name)) return "Material";
-            foreach (char c in Path.GetInvalidFileNameChars())
-            {
-                name = name.Replace(c, '_');
-            }
-            return string.IsNullOrEmpty(name) ? "Material" : name;
-        }
-
-        static string GetTargetFolder(Material material)
-        {
-            Texture mainTex = material.HasProperty("_MainTex") ? material.GetTexture("_MainTex") : null;
-            if (mainTex != null)
-            {
-                string mainTexPath = AssetDatabase.GetAssetPath(mainTex);
-                if (IsWritableAssetPath(mainTexPath))
-                {
-                    string dir = Path.GetDirectoryName(mainTexPath);
-                    if (!string.IsNullOrEmpty(dir)) return dir.Replace("\\", "/");
-                }
-            }
-
-            string matPath = AssetDatabase.GetAssetPath(material);
-            if (IsWritableAssetPath(matPath))
-            {
-                string dir = Path.GetDirectoryName(matPath);
-                if (!string.IsNullOrEmpty(dir)) return dir.Replace("\\", "/");
-            }
-
-            return "Assets";
-        }
+        /// <summary>
+        /// True for a material the user actually authored, as opposed to one a build pass produced.
+        /// </summary>
+        /// <remarks>
+        /// NDMF saves the materials its passes generate - including this plugin's own "(DnkwPacked)"
+        /// clones - as sub-assets of a container in Assets/, where a project-wide FindAssets("t:Material")
+        /// happily finds them. Packing those wrote a PNG for a material that ceases to exist when the
+        /// build ends, leaving an orphan behind on every upload. A real material is the main asset of
+        /// its own .mat file, which build output never is.
+        /// </remarks>
+        static bool IsAuthoredMaterialPath(string path)
+            => IsWritableAssetPath(path)
+               && path.EndsWith(".mat", System.StringComparison.OrdinalIgnoreCase);
 
         // Block-compress in place for the build. BC7 is used on PC rather than DXT5 because the four
         // channels hold four UNRELATED masks: DXT5 encodes RGB along a single line per 4x4 block, so

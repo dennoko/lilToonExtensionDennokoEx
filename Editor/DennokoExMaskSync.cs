@@ -113,6 +113,9 @@ namespace Dennokoworks
             EditorUtility.DisplayDialog("DennokoEx", $"Re-packed masks for {count} material(s).", "OK");
         }
 
+        [MenuItem("Window/DennokoEx/Clean Up Unused Masks")]
+        static void MenuCleanUpMasks() => DennokoExMaskPacker.CleanUpUnusedMasks();
+
         // ====================================================================
         //  Deferred bake queue
         // ====================================================================
