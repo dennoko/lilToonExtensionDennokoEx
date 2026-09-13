@@ -57,13 +57,17 @@ namespace Dennokoworks
         static readonly Dictionary<Material, int> _healStrikes = new Dictionary<Material, int>();
         static readonly Dictionary<Material, double> _healMuteUntil = new Dictionary<Material, double>();
 
-        // Materials found by a scan that still need their first bake. The set deduplicates the queue.
+        // Initial bakes, input validation and retries share a deduplicated, budgeted queue.
         static readonly Queue<Material> _bakeQueue = new Queue<Material>();
         static readonly HashSet<Material> _queued = new HashSet<Material>();
+        static readonly Dictionary<Material, double> _retryAt = new Dictionary<Material, double>();
 
         static bool _pendingScan;
         static double _nextScanTime;
         static double _nextHealTime;
+        static double _nextFallbackScanTime;
+        const double FallbackScanInterval = 2.0;
+        const double RetryInterval = 5.0;
         const double ScanInterval = 0.25; // min seconds between scans (object-change events fire while dragging)
         const long   BakeBudgetMs = 8;    // per-frame bake budget; at least one material is always processed
         const double HealInterval = 1.0; // seconds between self-heal passes
@@ -81,11 +85,38 @@ namespace Dennokoworks
             ObjectChangeEvents.changesPublished += OnChangesPublished;
             EditorSceneManager.sceneOpened += (_, __) => RequestScan();
             PrefabStage.prefabStageOpened += _ => RequestScan();
-            Undo.undoRedoPerformed += RequestScan;
+            Undo.undoRedoPerformed += RevalidateTrackedMaterials;
+            EditorApplication.playModeStateChanged += state =>
+            {
+                if (state == PlayModeStateChange.EnteredEditMode) RevalidateTrackedMaterials();
+            };
         }
 
         static void RequestScan() => _pendingScan = true;
-        static void OnChangesPublished(ref ObjectChangeEventStream stream) => _pendingScan = true;
+        static void OnChangesPublished(ref ObjectChangeEventStream stream)
+        {
+            RequestScan();
+            for (int i = 0; i < stream.length; i++)
+            {
+                if (stream.GetEventType(i) != ObjectChangeKind.ChangeAssetObjectProperties) continue;
+                stream.GetChangeAssetObjectPropertiesEvent(i, out var data);
+                var m = EditorUtility.InstanceIDToObject(data.instanceId) as Material;
+                if (m != null && (_sig.ContainsKey(m) || _preview.ContainsKey(m))) Enqueue(m);
+            }
+        }
+
+        static void Enqueue(Material m)
+        {
+            if (m != null && _queued.Add(m)) _bakeQueue.Enqueue(m);
+        }
+
+        static void RevalidateTrackedMaterials()
+        {
+            // Keep signatures: Sync compares inputs, so unrelated Undo and our own texture
+            // assignments do not cause another bake. Include the "none" state (no preview).
+            foreach (var m in _sig.Keys) Enqueue(m);
+            RequestScan();
+        }
 
         // Never touch materials while the asset pipeline or a build is busy — that is what caused the
         // import feedback loop. We simply wait; the update tick retries once things go idle.
@@ -118,6 +149,7 @@ namespace Dennokoworks
             _sig.Remove(m);
             _healStrikes.Remove(m);
             _healMuteUntil.Remove(m);
+            _retryAt.Remove(m);
         }
 
         static void OnUpdate()
@@ -127,18 +159,24 @@ namespace Dennokoworks
             double now = EditorApplication.timeSinceStartup;
 
             // (a) Scan the visible scene content and enqueue materials that were never synced.
-            if (_pendingScan && now >= _nextScanTime)
+            if ((_pendingScan || now >= _nextFallbackScanTime) && now >= _nextScanTime)
             {
                 _pendingScan = false;
                 _nextScanTime = now + ScanInterval;
+                _nextFallbackScanTime = now + FallbackScanInterval;
                 ScanVisibleMaterials();
+            }
+
+            foreach (var kv in _retryAt.ToList())
+            {
+                if (kv.Key == null) { Forget(kv.Key); continue; }
+                if (now >= kv.Value) Enqueue(kv.Key);
             }
 
             // (b) Drain the queue under a time budget so a large backlog is spread over many frames.
             if (_bakeQueue.Count > 0)
             {
                 DrainQueue();
-                return;
             }
 
             // (c) Self-heal: after an upload/export/reimport the material's _CustomMaskPacked gets
@@ -155,7 +193,9 @@ namespace Dennokoworks
                 if (!CanPreview(m)) { Forget(m); continue; }
 
                 // Preview still assigned -> healthy. Clear any strike history.
-                if (m.GetTexture(DennokoExMaskPacker.PackedProp) == kv.Value) { _healStrikes.Remove(m); continue; }
+                if (kv.Value != null && m.GetTexture(DennokoExMaskPacker.PackedProp) == kv.Value) { _healStrikes.Remove(m); continue; }
+
+                if (_retryAt.TryGetValue(m, out var retry) && now < retry) continue;
 
                 // Preview was cleared (upload / export / reimport). Normally restore it — but if it keeps
                 // getting cleared right after we restore it, an external import/save loop is in progress;
@@ -187,9 +227,18 @@ namespace Dennokoworks
             {
                 var m = _bakeQueue.Dequeue();
                 _queued.Remove(m);
-                // Destroyed, switched away from DennokoEx, or already synced (e.g. via the inspector)
-                // while it was waiting in the queue.
-                if (m == null || _sig.ContainsKey(m)) continue;
+                if (m == null) continue;
+                if (!CanPreview(m)) { Forget(m); continue; }
+                // Missing previews are restored by self-heal below, which counts repeated clears.
+                // Object-change/Undo notifications must not restore them ahead of that loop guard.
+                if (_preview.TryGetValue(m, out var tex)
+                    && (tex == null || m.GetTexture(DennokoExMaskPacker.PackedProp) != tex)) continue;
+                // Automatic validation must not bypass the import/save loop cooldown.
+                if (_healMuteUntil.TryGetValue(m, out var until) && EditorApplication.timeSinceStartup < until)
+                {
+                    _retryAt[m] = until;
+                    continue;
+                }
 
                 try { Sync(m); }
                 catch (System.Exception e) { Debug.LogException(e); }
@@ -216,7 +265,7 @@ namespace Dennokoworks
 
         // Enqueue never-synced DennokoEx materials used by visible renderers (active in hierarchy and
         // enabled) in the loaded scenes and the open Prefab Stage. Already-synced materials are skipped
-        // without hashing their textures; mask edits on those are picked up by the inspector's Sync().
+        // without hashing their textures; input validation is queued by material changes and Undo.
         static void ScanVisibleMaterials()
         {
             try
@@ -243,8 +292,7 @@ namespace Dennokoworks
                                 if (mat == null || !seen.Add(mat)) continue;
                                 if (_sig.ContainsKey(mat) || _queued.Contains(mat)) continue;
                                 if (!IsDennokoEx(mat)) continue;
-                                _bakeQueue.Enqueue(mat);
-                                _queued.Add(mat);
+                                Enqueue(mat);
                             }
                         }
 
@@ -273,6 +321,15 @@ namespace Dennokoworks
         public static void ForceSync(Material m)
         {
             if (m == null) return;
+            if (Busy)
+            {
+                _sig.Remove(m);
+                _healStrikes.Remove(m);
+                _healMuteUntil.Remove(m);
+                _retryAt.Remove(m);
+                Enqueue(m);
+                return;
+            }
             Forget(m);
             Sync(m);
         }
@@ -291,35 +348,48 @@ namespace Dennokoworks
             if (Busy) return;
             if (m == null) return;
             if (!CanPreview(m)) { Forget(m); return; }
+            if (_retryAt.TryGetValue(m, out var retry) && EditorApplication.timeSinceStartup < retry) return;
 
+            // Null results and exceptions both remain retryable, even without another scene event.
+            // Do not destroy a usable preview until its replacement has been baked successfully.
+            try
+            {
+                if (TrySync(m)) { _retryAt.Remove(m); return; }
+            }
+            catch (System.Exception e) { Debug.LogException(e); }
+            _sig.Remove(m);
+            _retryAt[m] = EditorApplication.timeSinceStartup + RetryInterval;
+        }
+
+        static bool TrySync(Material m)
+        {
             string sig = DennokoExMaskPacker.NeedsPacking(m) ? Signature(m) : "none";
 
             // Already in sync and our preview texture is still assigned -> nothing to do.
             if (_sig.TryGetValue(m, out var prev) && prev == sig
                 && _preview.TryGetValue(m, out var cur) && cur != null
                 && m.GetTexture(DennokoExMaskPacker.PackedProp) == cur)
-                return;
-
-            if (_preview.TryGetValue(m, out var old) && old != null) Object.DestroyImmediate(old);
-            _preview.Remove(m);
+                return true;
 
             if (sig == "none")
             {
+                if (_preview.TryGetValue(m, out var old) && old != null) Object.DestroyImmediate(old);
+                _preview.Remove(m);
                 // No masks assigned -> leave the shader's "white" default.
                 if (m.GetTexture(DennokoExMaskPacker.PackedProp) != null)
                     m.SetTexture(DennokoExMaskPacker.PackedProp, null);
                 _sig[m] = sig;
-                return;
+                return true;
             }
 
             var tex = DennokoExMaskPacker.Bake(m);
-            if (tex != null)
-            {
-                tex.hideFlags = HideFlags.HideAndDontSave;
-                m.SetTexture(DennokoExMaskPacker.PackedProp, tex);
-                _preview[m] = tex;
-            }
+            if (tex == null) return false;
+            tex.hideFlags = HideFlags.HideAndDontSave;
+            m.SetTexture(DennokoExMaskPacker.PackedProp, tex);
+            if (_preview.TryGetValue(m, out var previous) && previous != null) Object.DestroyImmediate(previous);
+            _preview[m] = tex;
             _sig[m] = sig;
+            return true;
         }
 
         static string Signature(Material m)
