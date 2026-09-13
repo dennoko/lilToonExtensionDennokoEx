@@ -148,10 +148,10 @@ public class MyPackPlugin : Plugin<MyPackPlugin> {
 解決：`[InitializeOnLoad]` のエディタ専用クラスで、**インメモリの `HideAndDontSave` テクスチャ**を焼いて `_CustomMaskPacked` に割り当てる。**ディスクの `.mat` には書き込まない**ので git は汚れない。
 
 再ベイクの駆動は **`EditorApplication.update` の「アイドル時のみ」** に集約する（ループ耐性＋自己修復）：
-- **(a) ドメインリロード後に1回フル走査**：`InitializeOnLoad` で `_pendingFullSync=true` にし、updateでアイドルになった最初のフレームで全対象マテリアルを走査（インメモリ品はリロードで破棄されるため毎回再生成）。**Busy中は実行せず待つ**ので、リロード直後にインポート中でも取りこぼさない。
+- **(a) 表示中マテリアルのみ遅延ベイク**：`InitializeOnLoad` で走査を予約し、アイドル時に**ロード中シーンとPrefab Stageの「activeInHierarchy かつ Renderer.enabled」なレンダラー**だけを走査する（非アクティブな枝は打ち切り）。未同期のマテリアルだけをキューに積み、**1フレームあたり約8ms（最低1件）の予算**で順次ベイクする（インメモリ品はリロードで破棄されるため毎回再生成）。非表示の衣装などは起動時に焼かず、アクティブ化された時点で焼く。以前は読み込み済みシーンの全マテリアル（非アクティブ含む）を1フレームで焼いており、プロジェクトを開いた直後に長く操作を待たせていた。**Busy中は実行せず待つ**ので、リロード直後にインポート中でも取りこぼさない。
 - **(b) スロットル付き自己修復（例:1秒毎）**：アップロード/エクスポート/シェーダー再インポートの後処理で、マテリアルの `_CustomMaskPacked`（インメモリ割当）は **nullに戻される**。これを検知して**外れたものだけ再ベイク**する。「previewしたマテリアル」だけを巡回するので安価。→ **アップロード・エクスポート後に自動でプレビューが復帰する**。
 - **(c) インスペクターでマスク変更時**：`EditorGUI.BeginChangeCheck/EndChangeCheck` で囲み、変更時に対象マテリアルを即再ベイク（1秒待たず即反映）。
-- **(d) ヒエラルキー変更時（プレハブ配置/複製など）**：`EditorApplication.hierarchyChanged` でフラグを立て、アイドル時に**ロード中シーンのレンダラーのマテリアルだけ**を同期（フル走査より安価）。新しく持ち込まれたマテリアルのプレビューを反映する。`SetTexture` はヒエラルキーを変えないので再発火＝ループにならない。
+- **(d) 表示状態の変化時（プレハブ配置/複製、SetActive、Renderer有効化、マテリアル差し替えなど）**：`EditorApplication.hierarchyChanged`・`ObjectChangeEvents.changesPublished`・`EditorSceneManager.sceneOpened`・`PrefabStage.prefabStageOpened`・`Undo.undoRedoPerformed` で (a) の走査を再予約する（最短0.25秒間隔に間引き）。走査は未同期マテリアルしか積まず署名も計算しないので、発火が多くても安価。新たに表示されたマテリアルのプレビューを反映する。`SetTexture` はヒエラルキーを変えないので再発火＝ループにならない。Timeline/Animationプレビューによる表示切替はイベントに出ない場合があり、その時はインスペクター表示で補完される。
 - **(e) インスペクターの手動リフレッシュボタン**：署名キャッシュを破棄して**無条件に再ベイク**する `ForceSync` を呼ぶ。自動復帰が間に合わない／何か食い違ったときの保険。
 
 > ⚠️ **`AssetPostprocessor.OnPostprocessAllAssets` で再ベイクしてはいけない（無限ループの罠）**。

@@ -1,10 +1,13 @@
 #if UNITY_EDITOR
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.Linq;
 using System.Text;
 using UnityEditor;
+using UnityEditor.SceneManagement;
 using UnityEngine;
 using UnityEngine.SceneManagement;
+using Debug = UnityEngine.Debug;
 
 namespace Dennokoworks
 {
@@ -16,18 +19,28 @@ namespace Dennokoworks
     // _CustomMaskPacked, so masks would not preview. This class bakes an IN-MEMORY texture
     // (HideAndDontSave) and assigns it for preview only — it never writes to the material on disk.
     //
-    // Driving model (loop-proof, self-healing):
+    // Driving model (loop-proof, self-healing, lazy):
     //   * We NEVER react to AssetPostprocessor.OnPostprocessAllAssets. Doing so caused an endless
     //     ~0.5s reload loop during VRC upload (lilToon calls AssetDatabase.Refresh repeatedly) and
     //     .unitypackage import, because SetTexture re-triggered imports.
-    //   * Instead an EditorApplication.update tick does the work only when the editor is idle:
-    //       (a) a one-shot full project scan after each domain reload, and
-    //       (b) a throttled "self-heal" that re-bakes only previewed materials whose _CustomMaskPacked
+    //   * Only materials that are actually visible get baked automatically: renderers that are enabled
+    //     and active in hierarchy, in the loaded scenes or the open Prefab Stage. Inactive branches
+    //     (e.g. hidden outfits) are not baked until they become active. Baking every scene material at
+    //     startup stalled the editor for a long time right after opening a project.
+    //   * An EditorApplication.update tick does the work only when the editor is idle:
+    //       (a) a scene scan, requested after each domain reload and whenever the scene may have
+    //           changed (hierarchy / object changes, scene or Prefab Stage opened, undo/redo). The scan
+    //           only enqueues materials that have never been synced, so it stays cheap;
+    //       (b) the queue is drained under a per-frame time budget, so many pending bakes never freeze
+    //           the editor in a single frame;
+    //       (c) a throttled "self-heal" that re-bakes only previewed materials whose _CustomMaskPacked
     //           was cleared (this is what happens after an upload / export / shader reimport).
     //   * Everything is suppressed while compiling / importing / building / entering play mode, and
     //     it never reschedules aggressively, so it cannot spin.
     //   * SetTexture on an in-memory material does not change the asset database, so none of this can
     //     trigger further imports.
+    //   * Materials opened in the inspector are baked immediately via EnsurePreview(), whether or not
+    //     they are used in the scene.
     [InitializeOnLoad]
     public static class DennokoExMaskSync
     {
@@ -44,21 +57,35 @@ namespace Dennokoworks
         static readonly Dictionary<Material, int> _healStrikes = new Dictionary<Material, int>();
         static readonly Dictionary<Material, double> _healMuteUntil = new Dictionary<Material, double>();
 
-        static bool _pendingFullSync;
-        static bool _pendingSceneSync;
+        // Materials found by a scan that still need their first bake. The set deduplicates the queue.
+        static readonly Queue<Material> _bakeQueue = new Queue<Material>();
+        static readonly HashSet<Material> _queued = new HashSet<Material>();
+
+        static bool _pendingScan;
+        static double _nextScanTime;
         static double _nextHealTime;
+        const double ScanInterval = 0.25; // min seconds between scans (object-change events fire while dragging)
+        const long   BakeBudgetMs = 8;    // per-frame bake budget; at least one material is always processed
         const double HealInterval = 1.0; // seconds between self-heal passes
         const int    HealMaxConsecutive = 4;    // consecutive re-clears before we conclude it's a loop
         const double HealMuteSeconds    = 60.0; // how long to pause auto-restore once a loop is detected
 
         static DennokoExMaskSync()
         {
-            _pendingFullSync = true; // transient textures are gone after a domain reload; rebuild when idle
+            _pendingScan = true; // transient textures are gone after a domain reload; rebuild when idle
             EditorApplication.update += OnUpdate;
-            // Placing/duplicating a prefab (or any hierarchy edit) can bring in materials whose preview
-            // has not been baked yet. Coalesce into a single scene-scoped sync that runs when idle.
-            EditorApplication.hierarchyChanged += () => _pendingSceneSync = true;
+            // Anything that can make a DennokoEx material newly visible requests a (coalesced) scan:
+            // placing/duplicating a prefab, activating a GameObject, enabling a Renderer, swapping a
+            // material, opening a scene or Prefab Stage, undo/redo.
+            EditorApplication.hierarchyChanged += RequestScan;
+            ObjectChangeEvents.changesPublished += OnChangesPublished;
+            EditorSceneManager.sceneOpened += (_, __) => RequestScan();
+            PrefabStage.prefabStageOpened += _ => RequestScan();
+            Undo.undoRedoPerformed += RequestScan;
         }
+
+        static void RequestScan() => _pendingScan = true;
+        static void OnChangesPublished(ref ObjectChangeEventStream stream) => _pendingScan = true;
 
         // Never touch materials while the asset pipeline or a build is busy — that is what caused the
         // import feedback loop. We simply wait; the update tick retries once things go idle.
@@ -97,33 +124,28 @@ namespace Dennokoworks
         {
             if (Busy) return;
 
-            // (a) One-shot rebuild after a domain reload (waits here until the editor is idle).
-            //     Scene materials only: a project-wide FindAssets("t:Material") + LoadAssetAtPath
-            //     stalls the editor for seconds on every recompile in a project with thousands of
-            //     materials, and a material that is not in a loaded scene is not being looked at.
-            //     Materials opened in the inspector are covered by EnsurePreview() instead.
-            if (_pendingFullSync)
+            double now = EditorApplication.timeSinceStartup;
+
+            // (a) Scan the visible scene content and enqueue materials that were never synced.
+            if (_pendingScan && now >= _nextScanTime)
             {
-                _pendingFullSync = false;
-                _pendingSceneSync = false;
-                SyncLoadedScenes();
-                _nextHealTime = EditorApplication.timeSinceStartup + HealInterval;
+                _pendingScan = false;
+                _nextScanTime = now + ScanInterval;
+                ScanVisibleMaterials();
+            }
+
+            // (b) Drain the queue under a time budget so a large backlog is spread over many frames.
+            if (_bakeQueue.Count > 0)
+            {
+                DrainQueue();
                 return;
             }
 
-            // Scene changed (e.g. a prefab was placed/duplicated) -> sync just the scene materials.
-            if (_pendingSceneSync)
-            {
-                _pendingSceneSync = false;
-                SyncLoadedScenes();
-                return;
-            }
-
-            // (b) Self-heal: after an upload/export/reimport the material's _CustomMaskPacked gets
+            // (c) Self-heal: after an upload/export/reimport the material's _CustomMaskPacked gets
             //     reset to null. Re-bake just those whose preview was dropped. Cheap: only iterates
             //     materials we have previewed, throttled to once per HealInterval.
-            if (EditorApplication.timeSinceStartup < _nextHealTime) return;
-            _nextHealTime = EditorApplication.timeSinceStartup + HealInterval;
+            if (now < _nextHealTime) return;
+            _nextHealTime = now + HealInterval;
 
             foreach (var kv in _preview.ToList())
             {
@@ -138,14 +160,14 @@ namespace Dennokoworks
                 // Preview was cleared (upload / export / reimport). Normally restore it — but if it keeps
                 // getting cleared right after we restore it, an external import/save loop is in progress;
                 // stop feeding it. Paused materials recover after the cooldown or via the manual refresh.
-                if (_healMuteUntil.TryGetValue(m, out var until) && EditorApplication.timeSinceStartup < until)
+                if (_healMuteUntil.TryGetValue(m, out var until) && now < until)
                     continue;
 
                 int strikes = _healStrikes.TryGetValue(m, out var s) ? s + 1 : 1;
                 if (strikes >= HealMaxConsecutive)
                 {
                     _healStrikes.Remove(m);
-                    _healMuteUntil[m] = EditorApplication.timeSinceStartup + HealMuteSeconds;
+                    _healMuteUntil[m] = now + HealMuteSeconds;
                     Debug.LogWarning(
                         $"[DennokoEx] Mask preview for '{m.name}' kept being cleared by an external asset " +
                         $"import/save loop, so auto-refresh is paused for {HealMuteSeconds:0}s to avoid feeding it. " +
@@ -155,6 +177,24 @@ namespace Dennokoworks
                 }
                 _healStrikes[m] = strikes;
                 Sync(m); // restore preview
+            }
+        }
+
+        static void DrainQueue()
+        {
+            var sw = Stopwatch.StartNew();
+            while (_bakeQueue.Count > 0)
+            {
+                var m = _bakeQueue.Dequeue();
+                _queued.Remove(m);
+                // Destroyed, switched away from DennokoEx, or already synced (e.g. via the inspector)
+                // while it was waiting in the queue.
+                if (m == null || _sig.ContainsKey(m)) continue;
+
+                try { Sync(m); }
+                catch (System.Exception e) { Debug.LogException(e); }
+
+                if (sw.ElapsedMilliseconds >= BakeBudgetMs) break;
             }
         }
 
@@ -174,22 +214,56 @@ namespace Dennokoworks
             catch (System.Exception e) { Debug.LogException(e); }
         }
 
-        // Sync only materials used by renderers in the currently loaded scenes. Cheap compared to a
-        // full project scan, and covers prefabs that were just placed/duplicated into the hierarchy.
-        static void SyncLoadedScenes()
+        // Enqueue never-synced DennokoEx materials used by visible renderers (active in hierarchy and
+        // enabled) in the loaded scenes and the open Prefab Stage. Already-synced materials are skipped
+        // without hashing their textures; mask edits on those are picked up by the inspector's Sync().
+        static void ScanVisibleMaterials()
         {
-            if (Busy) return;
             try
             {
+                var seen = new HashSet<Material>();
+                var renderers = new List<Renderer>();
+                var stack = new Stack<Transform>();
+
+                void Visit(GameObject root)
+                {
+                    stack.Push(root.transform);
+                    while (stack.Count > 0)
+                    {
+                        var tr = stack.Pop();
+                        // Inactive GameObjects hide their whole subtree: prune it.
+                        if (!tr.gameObject.activeSelf) continue;
+
+                        tr.GetComponents(renderers);
+                        foreach (var r in renderers)
+                        {
+                            if (!r.enabled) continue;
+                            foreach (var mat in r.sharedMaterials)
+                            {
+                                if (mat == null || !seen.Add(mat)) continue;
+                                if (_sig.ContainsKey(mat) || _queued.Contains(mat)) continue;
+                                if (!IsDennokoEx(mat)) continue;
+                                _bakeQueue.Enqueue(mat);
+                                _queued.Add(mat);
+                            }
+                        }
+
+                        for (int i = tr.childCount - 1; i >= 0; i--)
+                            stack.Push(tr.GetChild(i));
+                    }
+                }
+
                 for (int s = 0; s < SceneManager.sceneCount; s++)
                 {
                     var scene = SceneManager.GetSceneAt(s);
                     if (!scene.isLoaded) continue;
                     foreach (var root in scene.GetRootGameObjects())
-                        foreach (var r in root.GetComponentsInChildren<Renderer>(true))
-                            foreach (var mat in r.sharedMaterials)
-                                if (IsDennokoEx(mat)) Sync(mat);
+                        Visit(root);
                 }
+
+                var stage = PrefabStageUtility.GetCurrentPrefabStage();
+                if (stage != null && stage.prefabContentsRoot != null)
+                    Visit(stage.prefabContentsRoot);
             }
             catch (System.Exception e) { Debug.LogException(e); }
         }
@@ -204,8 +278,8 @@ namespace Dennokoworks
         }
 
         // Bake the preview only if this material is not previewed yet. Cheap enough to call from
-        // OnGUI: it never hashes the mask textures unless a bake is actually needed. Covers the case
-        // where a material was just switched TO DennokoEx, which no other trigger notices.
+        // OnGUI: it never hashes the mask textures unless a bake is actually needed. Covers materials
+        // that are not visible in the scene, and a material that was just switched TO DennokoEx.
         public static void EnsurePreview(Material m)
         {
             if (m == null || _preview.ContainsKey(m)) return;
