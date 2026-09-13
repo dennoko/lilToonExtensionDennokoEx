@@ -29,6 +29,8 @@ namespace Dennokoworks
         const int MaxSize = 2048;
         const int MinSize = 4;
 
+        static bool _loggedMissingShader;
+
         // Returns true if the material has at least one non-default mask worth packing.
         public static bool NeedsPacking(Material m)
         {
@@ -65,9 +67,15 @@ namespace Dennokoworks
             var shader = Shader.Find(PackerShader);
             if (shader == null)
             {
-                Debug.LogError($"[DennokoEx] Mask packer shader '{PackerShader}' not found; cannot pack masks.");
+                // The editor preview retries failed bakes in the background, so report a missing shader
+                // there only once until it is found again. Builds always report it: a build without the
+                // shader ships white masks.
+                if (forBuild || !_loggedMissingShader)
+                    Debug.LogError($"[DennokoEx] Mask packer shader '{PackerShader}' not found; cannot pack masks.");
+                _loggedMissingShader = true;
                 return null;
             }
+            _loggedMissingShader = false;
 
             var mat = new Material(shader) { hideFlags = HideFlags.HideAndDontSave };
             // Null -> Unity binds the shader's "white" default, which is the correct neutral mask value.

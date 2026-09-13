@@ -33,8 +33,13 @@ namespace Dennokoworks
     //           only enqueues materials that have never been synced, so it stays cheap;
     //       (b) the queue is drained under a per-frame time budget, so many pending bakes never freeze
     //           the editor in a single frame;
-    //       (c) a throttled "self-heal" that re-bakes only previewed materials whose _CustomMaskPacked
-    //           was cleared (this is what happens after an upload / export / shader reimport).
+    //       (c) a throttled "self-heal" that detects previewed materials whose _CustomMaskPacked was
+    //           cleared (this is what happens after an upload / export / shader reimport), applies the
+    //           loop guard, and hands the approved restores to the budgeted queue. Restoring them inline
+    //           re-baked every previewed material in one frame after each upload.
+    //   * A bake that fails is retried with exponential backoff and reported once per failure streak,
+    //     so a persistent cause (e.g. the packer shader is missing) neither spams the Console nor looks
+    //     like an external import/save loop to the loop guard.
     //   * Everything is suppressed while compiling / importing / building / entering play mode, and
     //     it never reschedules aggressively, so it cannot spin.
     //   * SetTexture on an in-memory material does not change the asset database, so none of this can
@@ -57,17 +62,24 @@ namespace Dennokoworks
         static readonly Dictionary<Material, int> _healStrikes = new Dictionary<Material, int>();
         static readonly Dictionary<Material, double> _healMuteUntil = new Dictionary<Material, double>();
 
-        // Initial bakes, input validation and retries share a deduplicated, budgeted queue.
+        // Initial bakes, input validation, self-heal restores and retries share a deduplicated,
+        // budgeted queue.
         static readonly Queue<Material> _bakeQueue = new Queue<Material>();
         static readonly HashSet<Material> _queued = new HashSet<Material>();
+        // Cleared previews that self-heal has already passed through the loop guard. Only these may be
+        // restored by the queue; other queue entries for a cleared preview are left to self-heal.
+        static readonly HashSet<Material> _healApproved = new HashSet<Material>();
         static readonly Dictionary<Material, double> _retryAt = new Dictionary<Material, double>();
+        // Consecutive failed bakes per material; drives the retry backoff and log-once behaviour.
+        static readonly Dictionary<Material, int> _failCount = new Dictionary<Material, int>();
 
         static bool _pendingScan;
         static double _nextScanTime;
         static double _nextHealTime;
         static double _nextFallbackScanTime;
         const double FallbackScanInterval = 2.0;
-        const double RetryInterval = 5.0;
+        const double RetryInterval    = 5.0;  // first retry delay after a failed bake; doubles per failure
+        const double RetryMaxInterval = 60.0; // backoff cap, so a fixed cause is still picked up within a minute
         const double ScanInterval = 0.25; // min seconds between scans (object-change events fire while dragging)
         const long   BakeBudgetMs = 8;    // per-frame bake budget; at least one material is always processed
         const double HealInterval = 1.0; // seconds between self-heal passes
@@ -137,6 +149,12 @@ namespace Dennokoworks
         static bool CanPreview(Material m)
             => IsDennokoEx(m) && m.HasProperty(DennokoExMaskPacker.PackedProp);
 
+        // True when we had assigned a preview that is no longer on the material (cleared by an upload /
+        // export / reimport, or the texture itself was destroyed). Call only after CanPreview(m).
+        static bool IsPreviewCleared(Material m)
+            => _preview.TryGetValue(m, out var tex)
+               && (tex == null || m.GetTexture(DennokoExMaskPacker.PackedProp) != tex);
+
         // Stop tracking a material (destroyed, or its shader was switched away from DennokoEx) and
         // release the in-memory preview texture. Deliberately does NOT write to the material: the
         // property no longer exists there, so clearing it is both impossible and unnecessary — the
@@ -149,7 +167,9 @@ namespace Dennokoworks
             _sig.Remove(m);
             _healStrikes.Remove(m);
             _healMuteUntil.Remove(m);
+            _healApproved.Remove(m);
             _retryAt.Remove(m);
+            _failCount.Remove(m);
         }
 
         static void OnUpdate()
@@ -167,10 +187,18 @@ namespace Dennokoworks
                 ScanVisibleMaterials();
             }
 
-            foreach (var kv in _retryAt.ToList())
+            if (_retryAt.Count > 0)
             {
-                if (kv.Key == null) { Forget(kv.Key); continue; }
-                if (now >= kv.Value) Enqueue(kv.Key);
+                foreach (var kv in _retryAt.ToList())
+                {
+                    var m = kv.Key;
+                    if (!CanPreview(m)) { Forget(m); continue; }
+                    if (now < kv.Value) continue;
+                    // A cleared preview is retried by self-heal (through the loop guard), not from here;
+                    // enqueueing it would only be skipped by DrainQueue again every frame.
+                    if (IsPreviewCleared(m) && !_healApproved.Contains(m)) continue;
+                    Enqueue(m);
+                }
             }
 
             // (b) Drain the queue under a time budget so a large backlog is spread over many frames.
@@ -180,8 +208,9 @@ namespace Dennokoworks
             }
 
             // (c) Self-heal: after an upload/export/reimport the material's _CustomMaskPacked gets
-            //     reset to null. Re-bake just those whose preview was dropped. Cheap: only iterates
-            //     materials we have previewed, throttled to once per HealInterval.
+            //     reset to null. Detect those, run the loop guard, and queue the approved restores so
+            //     they are baked under the frame budget. Only iterates materials we have previewed,
+            //     throttled to once per HealInterval.
             if (now < _nextHealTime) return;
             _nextHealTime = now + HealInterval;
 
@@ -193,7 +222,10 @@ namespace Dennokoworks
                 if (!CanPreview(m)) { Forget(m); continue; }
 
                 // Preview still assigned -> healthy. Clear any strike history.
-                if (kv.Value != null && m.GetTexture(DennokoExMaskPacker.PackedProp) == kv.Value) { _healStrikes.Remove(m); continue; }
+                if (!IsPreviewCleared(m)) { _healStrikes.Remove(m); continue; }
+
+                // Already approved and waiting for its budgeted bake: do not count the same clear twice.
+                if (_healApproved.Contains(m)) continue;
 
                 if (_retryAt.TryGetValue(m, out var retry) && now < retry) continue;
 
@@ -216,7 +248,8 @@ namespace Dennokoworks
                     continue;
                 }
                 _healStrikes[m] = strikes;
-                Sync(m); // restore preview
+                _healApproved.Add(m);
+                Enqueue(m); // restored by DrainQueue under the frame budget
             }
         }
 
@@ -229,10 +262,11 @@ namespace Dennokoworks
                 _queued.Remove(m);
                 if (m == null) continue;
                 if (!CanPreview(m)) { Forget(m); continue; }
-                // Missing previews are restored by self-heal below, which counts repeated clears.
-                // Object-change/Undo notifications must not restore them ahead of that loop guard.
-                if (_preview.TryGetValue(m, out var tex)
-                    && (tex == null || m.GetTexture(DennokoExMaskPacker.PackedProp) != tex)) continue;
+                bool healApproved = _healApproved.Remove(m);
+                // Missing previews are restored only after self-heal approved them, because self-heal
+                // counts repeated clears. Object-change/Undo notifications must not restore them ahead
+                // of that loop guard.
+                if (!healApproved && IsPreviewCleared(m)) continue;
                 // Automatic validation must not bypass the import/save loop cooldown.
                 if (_healMuteUntil.TryGetValue(m, out var until) && EditorApplication.timeSinceStartup < until)
                 {
@@ -316,8 +350,8 @@ namespace Dennokoworks
             catch (System.Exception e) { Debug.LogException(e); }
         }
 
-        // Manual refresh: drop cached state for the material (this also clears any loop-guard mute)
-        // and re-bake unconditionally.
+        // Manual refresh: drop cached state for the material (this also clears any loop-guard mute
+        // and failure backoff) and re-bake unconditionally.
         public static void ForceSync(Material m)
         {
             if (m == null) return;
@@ -327,6 +361,7 @@ namespace Dennokoworks
                 _healStrikes.Remove(m);
                 _healMuteUntil.Remove(m);
                 _retryAt.Remove(m);
+                _failCount.Remove(m);
                 Enqueue(m);
                 return;
             }
@@ -352,13 +387,39 @@ namespace Dennokoworks
 
             // Null results and exceptions both remain retryable, even without another scene event.
             // Do not destroy a usable preview until its replacement has been baked successfully.
+            System.Exception error = null;
             try
             {
-                if (TrySync(m)) { _retryAt.Remove(m); return; }
+                if (TrySync(m))
+                {
+                    _retryAt.Remove(m);
+                    _failCount.Remove(m);
+                    return;
+                }
             }
-            catch (System.Exception e) { Debug.LogException(e); }
+            catch (System.Exception e) { error = e; }
+
+            int fails = _failCount.TryGetValue(m, out var f) ? f + 1 : 1;
+            _failCount[m] = fails;
+            double delay = System.Math.Min(RetryInterval * System.Math.Pow(2, fails - 1), RetryMaxInterval);
+
+            // Report once per failure streak. A persistent cause (e.g. the packer shader is missing)
+            // would otherwise log again on every retry for every affected material.
+            if (fails == 1)
+            {
+                if (error != null) Debug.LogException(error);
+                Debug.LogWarning(
+                    $"[DennokoEx] Mask preview bake failed for '{m.name}'. Retrying in the background " +
+                    $"(backoff up to {RetryMaxInterval:0}s); further failures are not logged. " +
+                    "Use the material's manual mask-preview refresh button to retry immediately.");
+            }
+
             _sig.Remove(m);
-            _retryAt[m] = EditorApplication.timeSinceStartup + RetryInterval;
+            // Nothing was assigned, so this material cannot be feeding an external import/save loop.
+            // Without this, a bake that keeps failing while its preview is cleared would reach the loop
+            // guard's strike limit and be misreported as such a loop.
+            _healStrikes.Remove(m);
+            _retryAt[m] = EditorApplication.timeSinceStartup + delay;
         }
 
         static bool TrySync(Material m)
