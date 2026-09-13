@@ -1,9 +1,8 @@
 {
-    "name": "DennokoEx.NDMF.Editor",
+    "name": "DennokoEx.VRCSDK.Editor",
     "rootNamespace": "",
     "references": [
-        "DennokoEx.Editor",
-        "nadena.dev.ndmf"
+        "DennokoEx.Editor"
     ],
     "includePlatforms": [
         "Editor"
@@ -14,13 +13,13 @@
     "precompiledReferences": [],
     "autoReferenced": false,
     "defineConstraints": [
-        "DENNOKOEX_HAS_NDMF"
+        "DENNOKOEX_HAS_VRCSDK_AVATARS"
     ],
     "versionDefines": [
         {
-            "name": "nadena.dev.ndmf",
+            "name": "com.vrchat.avatars",
             "expression": "",
-            "define": "DENNOKOEX_HAS_NDMF"
+            "define": "DENNOKOEX_HAS_VRCSDK_AVATARS"
         }
     ],
     "noEngineReferences": false

@@ -199,17 +199,15 @@ namespace Dennokoworks
 
             EditorGUILayout.LabelField("DennokoEx", EditorStyles.centeredGreyMiniLabel);
 
-            // A material that was just switched TO DennokoEx has no packed-mask preview yet and
-            // nothing else triggers one until the next domain reload. Cheap no-op once baked.
-            foreach (var t0 in m_MaterialEditor.targets)
-                if (t0 is Material m0) DennokoExMaskSync.EnsurePreview(m0);
-
-            // Manual mask-preview refresh (re-bakes the in-memory _CustomMaskPacked for these materials).
-            if (GUILayout.Button(Loc("btn_refresh_mask_preview")))
+            // Manual repair: regenerate the packed mask files of these materials. Deferred out of OnGUI
+            // because it imports assets.
+            if (GUILayout.Button(Loc("btn_rebuild_packed_mask")))
+            {
+                var mats = new List<Material>();
                 foreach (var t in m_MaterialEditor.targets)
-                    if (t is Material mm) DennokoExMaskSync.ForceSync(mm);
-
-            EditorGUI.BeginChangeCheck();
+                    if (t is Material mm) mats.Add(mm);
+                EditorApplication.delayCall += () => DennokoExPackedMaskStore.EnsureAll(mats, persist: true, rebake: true);
+            }
 
             DrawMain4th();
             DrawRefl2nd();
@@ -217,10 +215,10 @@ namespace Dennokoworks
             DrawNormal3rd();
             DrawDecal();
 
-            // Rebuild the in-memory packed-mask preview when any mask slot may have changed.
-            if (EditorGUI.EndChangeCheck())
-                foreach (var t in m_MaterialEditor.targets)
-                    if (t is Material mm) DennokoExMaskSync.Sync(mm);
+            // Queues a packed-mask update when the slots differ from the last check: covers opening the
+            // material, editing/pasting/undoing slots, and switching a material to DennokoEx.
+            foreach (var t in m_MaterialEditor.targets)
+                if (t is Material mm) DennokoExPackedMaskWatcher.RequestIfSlotsChanged(mm);
         }
 
         // ========================================================================

@@ -53,9 +53,18 @@ In `custom.hlsl`, Reflection 2nd has two code paths gated by `#if DNKW_VRCLV_AVA
 - **Copy/paste buffer**: Per-section gear menu (static dictionaries `_clipFloats`, `_clipColors`, etc.). Undo is recorded via `Undo.RecordObjects` before paste.
 - **Localization**: `DennokoExLanguage.Get(key)` loads `Resources/Language/<lang>.json` (keyed by lilToon's `lilLanguageManager.langSet.languageName`), falling back to `en-US`. Add new UI strings to both `en-US.json` and `ja-JP.json`.
 
+### Mask Packing (64 texture-parameter limit)
+
+The shader samples only `_CustomMaskPacked` (R=Refl2nd, G=Rim2nd, B=Normal3rd, A=Main4th masks); the four individual `_Custom*MaskTex` slots are authoring-only. The packed texture is a persistent PNG at `Assets/DennokoEx_Generated/PackedMasks/<input-fingerprint>.png`:
+
+- `DennokoExMaskPacker` bakes pixels; `DennokoExPackedMaskStore.EnsureAll` names files by input fingerprint (slot GUIDs + dependency hashes + `Version`), writes missing ones and assigns the reference. It is idempotent — keep every write gated by that comparison, since triggers react to asset imports.
+- `DennokoExPackedMaskWatcher` queues `EnsureAll` from the inspector, material changes and source texture imports/deletions, and forces the generated PNGs' import settings (linear, BC7/ASTC, mip streaming).
+- `Editor/VRCSDK/DennokoExPackedMaskBuildHook` (callbackOrder 0, only with `com.vrchat.avatars`) re-checks renderer and animation-clip materials before lilToon's build step.
+- Bump `DennokoExMaskPacker.Version` when baked output changes; bump the postprocessor `GetVersion()` when import settings change. Background: `Docs/Impl/mask_packing_alternatives.md` §11.
+
 ### Assembly Definition
 
-`Editor/DennokoEx.Editor.asmdef` is Editor-only and references `lilToon.Editor`. All editor code is wrapped in `#if UNITY_EDITOR`.
+`Editor/DennokoEx.Editor.asmdef` is Editor-only and references `lilToon.Editor`. All editor code is wrapped in `#if UNITY_EDITOR`. `Editor/VRCSDK/DennokoEx.VRCSDK.Editor.asmdef` compiles only when the VRChat Avatars SDK is installed (`versionDefines`).
 
 ## Shader Property Naming Conventions
 
