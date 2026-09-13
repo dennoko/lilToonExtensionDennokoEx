@@ -61,8 +61,14 @@ namespace Dennokoworks
         // such a loop. Recovers automatically after the cooldown, on domain reload, or via ForceSync.
         static readonly Dictionary<Material, int> _healStrikes = new Dictionary<Material, int>();
         static readonly Dictionary<Material, double> _healMuteUntil = new Dictionary<Material, double>();
-        // Measure stability from the actual assignment, not from approval or queue insertion.
-        static readonly Dictionary<Material, double> _previewAssignedAt = new Dictionary<Material, double>();
+        // Update tick of the actual preview assignment (not approval or queue insertion). A healthy
+        // observation only clears strikes for an assignment made in an EARLIER update: one restored
+        // in the same update (after a long import/queue wait) cannot disprove a loop yet. Ticks rather
+        // than wall-clock time, because a normal restore lands a frame after the heal pass, so
+        // "survived a full HealInterval" would only be true one pass late — widening the loop
+        // detection to clears roughly every two passes.
+        static readonly Dictionary<Material, long> _previewAssignedTick = new Dictionary<Material, long>();
+        static long _updateTick;
 
         // Initial bakes, input validation, self-heal restores and retries share a deduplicated,
         // budgeted queue.
@@ -169,7 +175,7 @@ namespace Dennokoworks
             _sig.Remove(m);
             _healStrikes.Remove(m);
             _healMuteUntil.Remove(m);
-            _previewAssignedAt.Remove(m);
+            _previewAssignedTick.Remove(m);
             _healApproved.Remove(m);
             _retryAt.Remove(m);
             _failCount.Remove(m);
@@ -177,6 +183,7 @@ namespace Dennokoworks
 
         static void OnUpdate()
         {
+            _updateTick++;
             if (Busy) return;
 
             double now = EditorApplication.timeSinceStartup;
@@ -225,12 +232,13 @@ namespace Dennokoworks
                 if (!CanPreview(m)) { Forget(m); continue; }
 
                 // DrainQueue may have restored this preview earlier in this very update after a
-                // long import or queue wait. Only clear strikes once the assignment has survived
-                // a full heal interval; an immediate healthy observation cannot disprove a loop.
+                // long import or queue wait. Only clear strikes for an assignment made in an earlier
+                // update; an immediate healthy observation cannot disprove a loop. A normal restore
+                // (baked the frame after approval) is still reset on the very next heal pass.
                 if (!IsPreviewCleared(m))
                 {
-                    if (_previewAssignedAt.TryGetValue(m, out var assignedAt)
-                        && now - assignedAt >= HealInterval)
+                    if (_previewAssignedTick.TryGetValue(m, out var assignedTick)
+                        && assignedTick < _updateTick)
                         _healStrikes.Remove(m);
                     continue;
                 }
@@ -447,7 +455,7 @@ namespace Dennokoworks
             {
                 if (_preview.TryGetValue(m, out var old) && old != null) Object.DestroyImmediate(old);
                 _preview.Remove(m);
-                _previewAssignedAt.Remove(m);
+                _previewAssignedTick.Remove(m);
                 // No masks assigned -> leave the shader's "white" default.
                 if (m.GetTexture(DennokoExMaskPacker.PackedProp) != null)
                     m.SetTexture(DennokoExMaskPacker.PackedProp, null);
@@ -461,7 +469,7 @@ namespace Dennokoworks
             m.SetTexture(DennokoExMaskPacker.PackedProp, tex);
             if (_preview.TryGetValue(m, out var previous) && previous != null) Object.DestroyImmediate(previous);
             _preview[m] = tex;
-            _previewAssignedAt[m] = EditorApplication.timeSinceStartup;
+            _previewAssignedTick[m] = _updateTick;
             _sig[m] = sig;
             return true;
         }
