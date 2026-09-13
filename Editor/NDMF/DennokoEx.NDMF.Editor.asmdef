@@ -1,0 +1,18 @@
+{
+    "name": "DennokoEx.NDMF.Editor",
+    "rootNamespace": "",
+    "references": [],
+    "includePlatforms": [
+        "Editor"
+    ],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": false,
+    "defineConstraints": [
+        "DENNOKOEX_OBSOLETE_STUB_NEVER_DEFINED"
+    ],
+    "versionDefines": [],
+    "noEngineReferences": false
+}

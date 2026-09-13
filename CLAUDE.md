@@ -66,6 +66,10 @@ The shader samples only `_CustomMaskPacked` (R=Refl2nd, G=Rim2nd, B=Normal3rd, A
 
 `Editor/DennokoEx.Editor.asmdef` is Editor-only and references `lilToon.Editor`. All editor code is wrapped in `#if UNITY_EDITOR`. `Editor/VRCSDK/DennokoEx.VRCSDK.Editor.asmdef` compiles only when the VRChat Avatars SDK is installed (`versionDefines`).
 
+### Removing Released Files
+
+Users update by overwriting with a `.unitypackage`, which never deletes files. Do not delete a file that has shipped: replace it with an empty stub that keeps its original `.meta` (GUID), as done for `Editor/DennokoExMaskSync.cs` and `Editor/NDMF/` (the stub asmdef has an undefined `defineConstraints` symbol so no assembly is built). `.meta` files are not tracked in git, so recover GUIDs from a released install.
+
 ## Shader Property Naming Conventions
 
 All custom properties use the prefix `_Custom` followed by the feature name and parameter:
