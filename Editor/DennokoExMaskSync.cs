@@ -61,6 +61,8 @@ namespace Dennokoworks
         // such a loop. Recovers automatically after the cooldown, on domain reload, or via ForceSync.
         static readonly Dictionary<Material, int> _healStrikes = new Dictionary<Material, int>();
         static readonly Dictionary<Material, double> _healMuteUntil = new Dictionary<Material, double>();
+        // Measure stability from the actual assignment, not from approval or queue insertion.
+        static readonly Dictionary<Material, double> _previewAssignedAt = new Dictionary<Material, double>();
 
         // Initial bakes, input validation, self-heal restores and retries share a deduplicated,
         // budgeted queue.
@@ -167,6 +169,7 @@ namespace Dennokoworks
             _sig.Remove(m);
             _healStrikes.Remove(m);
             _healMuteUntil.Remove(m);
+            _previewAssignedAt.Remove(m);
             _healApproved.Remove(m);
             _retryAt.Remove(m);
             _failCount.Remove(m);
@@ -221,8 +224,16 @@ namespace Dennokoworks
                 // material back to plain lilToon): drop it before touching the packed-mask property.
                 if (!CanPreview(m)) { Forget(m); continue; }
 
-                // Preview still assigned -> healthy. Clear any strike history.
-                if (!IsPreviewCleared(m)) { _healStrikes.Remove(m); continue; }
+                // DrainQueue may have restored this preview earlier in this very update after a
+                // long import or queue wait. Only clear strikes once the assignment has survived
+                // a full heal interval; an immediate healthy observation cannot disprove a loop.
+                if (!IsPreviewCleared(m))
+                {
+                    if (_previewAssignedAt.TryGetValue(m, out var assignedAt)
+                        && now - assignedAt >= HealInterval)
+                        _healStrikes.Remove(m);
+                    continue;
+                }
 
                 // Already approved and waiting for its budgeted bake: do not count the same clear twice.
                 if (_healApproved.Contains(m)) continue;
@@ -436,6 +447,7 @@ namespace Dennokoworks
             {
                 if (_preview.TryGetValue(m, out var old) && old != null) Object.DestroyImmediate(old);
                 _preview.Remove(m);
+                _previewAssignedAt.Remove(m);
                 // No masks assigned -> leave the shader's "white" default.
                 if (m.GetTexture(DennokoExMaskPacker.PackedProp) != null)
                     m.SetTexture(DennokoExMaskPacker.PackedProp, null);
@@ -449,6 +461,7 @@ namespace Dennokoworks
             m.SetTexture(DennokoExMaskPacker.PackedProp, tex);
             if (_preview.TryGetValue(m, out var previous) && previous != null) Object.DestroyImmediate(previous);
             _preview[m] = tex;
+            _previewAssignedAt[m] = EditorApplication.timeSinceStartup;
             _sig[m] = sig;
             return true;
         }
