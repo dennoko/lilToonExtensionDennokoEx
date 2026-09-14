@@ -58,9 +58,10 @@ In `custom.hlsl`, Reflection 2nd has two code paths gated by `#if DNKW_VRCLV_AVA
 The shader samples only `_CustomMaskPacked` (R=Refl2nd, G=Rim2nd, B=Normal3rd, A=Main4th masks); the four individual `_Custom*MaskTex` slots are authoring-only. The packed texture is a persistent PNG at `Assets/DennokoEx_Generated/PackedMasks/<input-fingerprint>.png`:
 
 - `DennokoExMaskPacker` bakes pixels; `DennokoExPackedMaskStore.EnsureAll` names files by input fingerprint (slot GUIDs + dependency hashes + `Version`), writes missing ones and assigns the reference. It is idempotent — keep every write gated by that comparison, since triggers react to asset imports.
-- `DennokoExPackedMaskWatcher` queues `EnsureAll` from the inspector, material changes and source texture imports/deletions, and forces the generated PNGs' import settings (linear, BC7/ASTC, mip streaming).
+- `DennokoExPackedMaskWatcher` queues `EnsureAll` from the inspector, material changes and source texture imports/deletions. Imported containers are filtered by dependency on the DennokoEx shader folder (`UsesDennokoExShader`) before `LoadAllAssetsAtPath`.
+- `EnsureAll` writes the generated PNGs' import settings (linear, BC7/ASTC, mip streaming) onto their own importers, reimporting only on mismatch. **Never add `OnPreprocessTexture` (or any per-type postprocessor callback / `GetVersion`)**: it becomes an import dependency of every texture, so installing/updating reimports the whole project.
 - `Editor/VRCSDK/DennokoExPackedMaskBuildHook` (callbackOrder 0, only with `com.vrchat.avatars`) re-checks renderer and animation-clip materials before lilToon's build step.
-- Bump `DennokoExMaskPacker.Version` when baked output changes; bump the postprocessor `GetVersion()` when import settings change. Background: `Docs/Impl/mask_packing_alternatives.md` §11.
+- Bump `DennokoExMaskPacker.Version` when baked output changes; import setting changes apply automatically on the next `EnsureAll` (menu: Update All Materials). Background: `Docs/Impl/mask_packing_alternatives.md` §11.
 
 ### Assembly Definition
 

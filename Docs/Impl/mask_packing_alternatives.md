@@ -280,8 +280,10 @@ SDK側には出荷対象の入力と生成物を検査する薄い処理を置�
 | ファイル | 役割 |
 | --- | --- |
 | `DennokoExMaskPacker` | 4スロットをGPUでRGBAにパックしPNGバイト列を返すだけ。永続化を知らない |
-| `DennokoExPackedMaskStore` | `EnsureAll(materials, persist, rebake)`。指紋計算、PNG書き出し・インポート、参照割り当て。保守メニュー |
-| `DennokoExPackedMaskWatcher` | いつ `EnsureAll` を呼ぶかと、生成PNGのImport設定（`OnPreprocessTexture`） |
+| `DennokoExPackedMaskStore` | `EnsureAll(materials, persist, rebake)`。指紋計算、PNG書き出し・インポート、生成PNGのImport設定（差分時のみ再インポート）、参照割り当て。保守メニュー |
+| `DennokoExPackedMaskWatcher` | いつ `EnsureAll` を呼ぶか（`OnPostprocessAllAssets` のみ） |
+
+> ⚠️ 生成PNGのImport設定を `AssetPostprocessor.OnPreprocessTexture` で行ってはいけない。テクスチャ用ポストプロセッサーの登録（と `GetVersion`）は全テクスチャのインポート依存に含まれるため、導入・更新のたびにプロジェクト内の全テクスチャが再インポートされ、大規模プロジェクトで数十分かかった。
 | `VRCSDK/DennokoExPackedMaskBuildHook` | アップロード前の最終整合（`com.vrchat.avatars` 導入時のみコンパイル） |
 
 生成先は `Assets/DennokoEx_Generated/PackedMasks/<指紋>.png`。拡張本体のフォルダー外に置き、配布パッケージへ混入させない。
@@ -302,8 +304,8 @@ SDK側には出荷対象の入力と生成物を検査する薄い処理を置�
 | GameObject生成（Prefab配置・貼り付け）、Rendererのプロパティ変更（Material差し替え） | 該当RendererのMaterialをキュー |
 | Inspector描画 | スロット参照（インスタンスID）が前回確認時から変わった時だけキュー。開いた時、編集・ペースト・Undo、DennokoExへの切替を網羅 |
 | `ObjectChangeEvents` のMaterialプロパティ変更 | キュー |
-| Material格納ファイル（`.mat`／`.asset`／モデル）のインポート | `LoadAllAssetsAtPath` でファイル内の全Materialをキュー（VCS更新・外部ツール・自分の保存・モデル再インポート） |
-| 元画像のインポート | 依存する保存済みファイルを `GetDependencies` で探し、ファイル内の全Materialをキュー。加えて、過去に確認したメモリ上Material（Scene埋め込み・スクリプト生成クローン）のうち、そのパスをスロットに持つ物をキュー |
+| Material格納ファイル（`.mat`／`.asset`／モデル）のインポート | DennokoExシェーダーフォルダーへの依存を `GetDependencies` で確認し、該当ファイルだけ `LoadAllAssetsAtPath` でファイル内の全Materialをキュー（VCS更新・外部ツール・自分の保存・モデル再インポート）。全体インポート時に全モデル・`.asset` を読み込まないため |
+| 元画像のインポート | DennokoExシェーダーに依存し、かつ変更画像に依存する保存済みファイルを `GetDependencies` で探し、ファイル内の全Materialをキュー。加えて、過去に確認したメモリ上Material（Scene埋め込み・スクリプト生成クローン）のうち、そのパスをスロットに持つ物をキュー |
 | 画像・生成物の削除 | 依存が辿れないため、DennokoExシェーダーを使う保存済みMaterialと、確認済みメモリ上Materialをすべて再確認（no-opが大半） |
 | VRChatアバターのアップロード | callbackOrder 0（NDMF/MAの後、lilToon 100の前）で Renderer とアニメーションクリップ参照のMaterialを `EnsureAll(persist:false)`。失敗時はアップロードを中止 |
 

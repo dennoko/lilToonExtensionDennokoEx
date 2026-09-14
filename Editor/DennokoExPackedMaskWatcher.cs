@@ -8,9 +8,8 @@ using UnityEngine.SceneManagement;
 
 namespace Dennokoworks
 {
-    // Decides WHEN DennokoExPackedMaskStore.EnsureAll runs, and owns the import settings of the
-    // generated files. Every trigger only queues work; the queue is processed once per editor update
-    // outside of imports, compilation and play-mode transitions. There is no retry, backoff or loop
+    // Decides WHEN DennokoExPackedMaskStore.EnsureAll runs. Every trigger only queues work; the queue
+    // is processed once per editor update outside of imports, compilation and play-mode transitions. There is no retry, backoff or loop
     // guard: EnsureAll is idempotent, so a repeated or overly broad trigger is a cheap no-op, and a
     // failure is logged and waits for the next real change (or the manual rebuild button).
     //
@@ -21,7 +20,8 @@ namespace Dennokoworks
     //   * Inspector: whenever the drawn material's mask slot references differ from what was last
     //     checked (covers opening, editing, paste, Undo while inspected, switching to DennokoEx).
     //   * Material property changes published by the editor (edits from other windows, Undo).
-    //   * Imported material containers (.mat, .asset, models): every material inside is checked.
+    //   * Imported material containers (.mat, .asset, models) that depend on a DennokoEx shader: every
+    //     material inside is checked. Others are skipped without loading them.
     //   * Imported or deleted source textures: saved materials that depend on them, and in-memory
     //     materials (scene-embedded, script-created clones) checked earlier that use them.
     //   * The VRChat avatar build hook calls EnsureAll directly (DennokoExPackedMaskBuildHook).
@@ -121,8 +121,11 @@ namespace Dennokoworks
                 CollectSceneMaterials(targets);
             }
 
+            // A full project import reports every model and .asset here; loading them all is what
+            // made first imports slow, so only files that reference a DennokoEx shader are loaded.
             foreach (var path in _containerPaths)
-                targets.AddRange(DennokoExPackedMaskStore.LoadMaterialsAtPath(path));
+                if (DennokoExPackedMaskStore.UsesDennokoExShader(path))
+                    targets.AddRange(DennokoExPackedMaskStore.LoadMaterialsAtPath(path));
             _containerPaths.Clear();
 
             if (_texturePaths.Count > 0 || _texturesDeleted)
@@ -167,23 +170,13 @@ namespace Dennokoworks
         // using a DennokoEx shader is re-checked instead; EnsureAll is a no-op for the unaffected ones.
         static void CollectAffectedAssetMaterials(List<Material> targets, HashSet<string> changed, bool anyDeleted)
         {
-            string shaderDir = null;
-            if (anyDeleted)
-            {
-                var shaderPath = AssetDatabase.GetAssetPath(Shader.Find("dennokoworks/DennokoEx"));
-                if (!string.IsNullOrEmpty(shaderPath)) shaderDir = Path.GetDirectoryName(shaderPath).Replace('\\', '/') + "/";
-            }
-
             foreach (var path in DennokoExPackedMaskStore.FindMaterialContainerPaths())
             {
-                foreach (var dep in AssetDatabase.GetDependencies(path, false))
-                {
-                    if (changed.Contains(dep) || (shaderDir != null && dep.StartsWith(shaderDir, System.StringComparison.OrdinalIgnoreCase)))
-                    {
-                        targets.AddRange(DennokoExPackedMaskStore.LoadMaterialsAtPath(path));
-                        break;
-                    }
-                }
+                var deps = AssetDatabase.GetDependencies(path, false);
+                if (!DennokoExPackedMaskStore.UsesDennokoExShader(deps)) continue;
+                bool hit = anyDeleted;
+                for (int i = 0; !hit && i < deps.Length; i++) hit = changed.Contains(deps[i]);
+                if (hit) targets.AddRange(DennokoExPackedMaskStore.LoadMaterialsAtPath(path));
             }
         }
 
@@ -243,17 +236,12 @@ namespace Dennokoworks
             foreach (var m in list) Request(m);
         }
 
+        // Only the static OnPostprocessAllAssets callback. Do NOT add per-type callbacks such as
+        // OnPreprocessTexture or override GetVersion: those become an import dependency of every asset of
+        // that type, so installing or updating DennokoEx would reimport the whole project's textures.
+        // Generated files get their import settings from DennokoExPackedMaskStore instead.
         class Postprocessor : AssetPostprocessor
         {
-            // Bump when ApplyImportSettings changes so existing generated files are reimported.
-            public override uint GetVersion() => 1;
-
-            void OnPreprocessTexture()
-            {
-                if (DennokoExPackedMaskStore.IsGeneratedPath(assetPath))
-                    ApplyImportSettings((TextureImporter)assetImporter);
-            }
-
             static void OnPostprocessAllAssets(string[] imported, string[] deleted, string[] moved, string[] movedFrom)
             {
                 bool queued = false;
@@ -285,41 +273,6 @@ namespace Dennokoworks
                 }
                 if (queued) Schedule();
             }
-        }
-
-        // The packed channels are four unrelated linear masks:
-        //   * sRGB off and alpha taken as-is, so values match what the individual slots produced.
-        //   * BC7 on PC rather than DXT5: DXT5 fits RGB to one line per 4x4 block, bleeding the
-        //     independent R/G/B masks into each other. ASTC on mobile, which has no BC7.
-        //   * Mipmaps + streaming for VRChat's texture memory budget; no CPU copy.
-        static void ApplyImportSettings(TextureImporter ti)
-        {
-            ti.textureType = TextureImporterType.Default;
-            ti.textureShape = TextureImporterShape.Texture2D;
-            ti.sRGBTexture = false;
-            ti.alphaSource = TextureImporterAlphaSource.FromInput;
-            ti.alphaIsTransparency = false;
-            ti.npotScale = TextureImporterNPOTScale.None;
-            ti.mipmapEnabled = true;
-            ti.streamingMipmaps = true;
-            ti.isReadable = false;
-            ti.wrapMode = TextureWrapMode.Repeat;
-            ti.filterMode = FilterMode.Bilinear;
-            ti.maxTextureSize = 2048;
-            ti.textureCompression = TextureImporterCompression.CompressedHQ;
-            SetPlatformFormat(ti, "Standalone", TextureImporterFormat.BC7);
-            SetPlatformFormat(ti, "Android", TextureImporterFormat.ASTC_6x6);
-            SetPlatformFormat(ti, "iPhone", TextureImporterFormat.ASTC_6x6);
-        }
-
-        static void SetPlatformFormat(TextureImporter ti, string platform, TextureImporterFormat format)
-        {
-            var s = ti.GetPlatformTextureSettings(platform);
-            s.overridden = true;
-            s.format = format;
-            s.maxTextureSize = 2048;
-            s.compressionQuality = (int)TextureCompressionQuality.Normal;
-            ti.SetPlatformTextureSettings(s);
         }
     }
 }

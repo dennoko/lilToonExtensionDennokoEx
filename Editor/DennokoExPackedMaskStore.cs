@@ -19,11 +19,17 @@ namespace Dennokoworks
     //   * EnsureAll is idempotent: when the assigned texture already is the expected file it writes
     //     nothing. Every trigger (inspector, asset changes, build) just calls it, and repeated calls
     //     converge after at most one write, so no loop guard or retry state is needed.
-    //   * Compression, mipmaps and streaming come from the TextureImporter (see
-    //     DennokoExPackedMaskWatcher), identically in the editor preview and in uploads.
+    //   * Compression, mipmaps and streaming come from the TextureImporter, identically in the editor
+    //     preview and in uploads. The settings are written to the generated files' own importers
+    //     (EnsureImportSettings), NOT by an AssetPostprocessor.OnPreprocessTexture: registering a
+    //     texture preprocessor changes the import dependency of every texture, so installing or
+    //     updating the extension would reimport all textures of the project.
     public static class DennokoExPackedMaskStore
     {
         public const string Folder = "Assets/DennokoEx_Generated/PackedMasks";
+
+        // GUID of Shaders/lts.lilcontainer; its folder holds every shader DennokoEx materials can use.
+        const string ShaderAssetGuid = "7d1b6c3fca9cc82499ca6d8b767fabb6";
 
         public static bool IsGeneratedPath(string path)
             => !string.IsNullOrEmpty(path)
@@ -89,6 +95,11 @@ namespace Dennokoworks
             {
                 if (editing) AssetDatabase.StopAssetEditing();
             }
+
+            var paths = new HashSet<string>();
+            foreach (var plan in plans)
+                if (plan.Value != null) paths.Add(plan.Value);
+            EnsureImportSettings(paths);
 
             // Pass 2: assign. Only materials whose reference actually changes are touched.
             foreach (var plan in plans)
@@ -160,6 +171,89 @@ namespace Dennokoworks
             => Debug.LogError($"[DennokoEx] Could not pack the masks of material '{m.name}'. Its packed mask was left unchanged.", m);
 
         // ------------------------------------------------------------------------------------------
+        //  Import settings of the generated files
+        // ------------------------------------------------------------------------------------------
+
+        const int ImportMaxSize = 2048;
+
+        static readonly (string platform, TextureImporterFormat format)[] PlatformFormats =
+        {
+            ("Standalone", TextureImporterFormat.BC7),
+            ("Android", TextureImporterFormat.ASTC_6x6),
+            ("iPhone", TextureImporterFormat.ASTC_6x6),
+        };
+
+        // Reimports only the files whose importer differs, so it is a no-op once the settings are in
+        // the .meta. A new file is imported once with defaults first and once more here.
+        static void EnsureImportSettings(IEnumerable<string> paths)
+        {
+            bool editing = false;
+            try
+            {
+                foreach (var path in paths)
+                {
+                    if (!(AssetImporter.GetAtPath(path) is TextureImporter ti) || !ApplyImportSettings(ti)) continue;
+                    if (!editing)
+                    {
+                        AssetDatabase.StartAssetEditing();
+                        editing = true;
+                    }
+                    ti.SaveAndReimport();
+                }
+            }
+            finally
+            {
+                if (editing) AssetDatabase.StopAssetEditing();
+            }
+        }
+
+        // The packed channels are four unrelated linear masks:
+        //   * sRGB off and alpha taken as-is, so values match what the individual slots produced.
+        //   * BC7 on PC rather than DXT5: DXT5 fits RGB to one line per 4x4 block, bleeding the
+        //     independent R/G/B masks into each other. ASTC on mobile, which has no BC7.
+        //   * Mipmaps + streaming for VRChat's texture memory budget; no CPU copy.
+        // Returns true if anything had to be changed.
+        static bool ApplyImportSettings(TextureImporter ti)
+        {
+            bool changed = false;
+            void Set<T>(T current, T target, System.Action<T> set)
+            {
+                if (EqualityComparer<T>.Default.Equals(current, target)) return;
+                set(target);
+                changed = true;
+            }
+
+            Set(ti.textureType, TextureImporterType.Default, v => ti.textureType = v);
+            Set(ti.textureShape, TextureImporterShape.Texture2D, v => ti.textureShape = v);
+            Set(ti.sRGBTexture, false, v => ti.sRGBTexture = v);
+            Set(ti.alphaSource, TextureImporterAlphaSource.FromInput, v => ti.alphaSource = v);
+            Set(ti.alphaIsTransparency, false, v => ti.alphaIsTransparency = v);
+            Set(ti.npotScale, TextureImporterNPOTScale.None, v => ti.npotScale = v);
+            Set(ti.mipmapEnabled, true, v => ti.mipmapEnabled = v);
+            Set(ti.streamingMipmaps, true, v => ti.streamingMipmaps = v);
+            Set(ti.isReadable, false, v => ti.isReadable = v);
+            Set(ti.wrapMode, TextureWrapMode.Repeat, v => ti.wrapMode = v);
+            Set(ti.filterMode, FilterMode.Bilinear, v => ti.filterMode = v);
+            Set(ti.maxTextureSize, ImportMaxSize, v => ti.maxTextureSize = v);
+            Set(ti.textureCompression, TextureImporterCompression.CompressedHQ, v => ti.textureCompression = v);
+
+            foreach (var (platform, format) in PlatformFormats)
+            {
+                var s = ti.GetPlatformTextureSettings(platform);
+                if (s.overridden && s.format == format && s.maxTextureSize == ImportMaxSize
+                    && s.compressionQuality == (int)TextureCompressionQuality.Normal)
+                    continue;
+                s.overridden = true;
+                s.format = format;
+                s.maxTextureSize = ImportMaxSize;
+                s.compressionQuality = (int)TextureCompressionQuality.Normal;
+                ti.SetPlatformTextureSettings(s);
+                changed = true;
+            }
+            return changed;
+        }
+
+        // ------------------------------------------------------------------------------------------
         //  Project-wide maintenance
         // ------------------------------------------------------------------------------------------
 
@@ -176,6 +270,29 @@ namespace Dennokoworks
             }
             return paths;
         }
+
+        // Folder of the DennokoEx shaders ("…/Shaders/"), or null if they cannot be located.
+        static string ShaderFolder()
+        {
+            string path = AssetDatabase.GUIDToAssetPath(ShaderAssetGuid);
+            if (string.IsNullOrEmpty(path)) path = AssetDatabase.GetAssetPath(Shader.Find("dennokoworks/DennokoEx"));
+            return string.IsNullOrEmpty(path) ? null : Path.GetDirectoryName(path).Replace('\\', '/') + "/";
+        }
+
+        // Whether a file whose direct dependencies are `dependencies` may hold a DennokoEx material.
+        // Reads the dependency database only, so it is far cheaper than LoadAllAssetsAtPath on models
+        // and large .asset files. Without a located shader folder nothing can be ruled out.
+        public static bool UsesDennokoExShader(string[] dependencies)
+        {
+            string folder = ShaderFolder();
+            if (folder == null) return true;
+            foreach (var dep in dependencies)
+                if (dep.StartsWith(folder, System.StringComparison.OrdinalIgnoreCase)) return true;
+            return false;
+        }
+
+        public static bool UsesDennokoExShader(string path)
+            => UsesDennokoExShader(AssetDatabase.GetDependencies(path, false));
 
         // Every DennokoEx material stored in the file, main asset or sub-asset.
         public static List<Material> LoadMaterialsAtPath(string path)
@@ -197,7 +314,7 @@ namespace Dennokoworks
                 for (int i = 0; i < paths.Count; i++)
                 {
                     if (EditorUtility.DisplayCancelableProgressBar("DennokoEx", paths[i], (float)i / paths.Count)) return;
-                    materials.AddRange(LoadMaterialsAtPath(paths[i]));
+                    if (UsesDennokoExShader(paths[i])) materials.AddRange(LoadMaterialsAtPath(paths[i]));
                 }
             }
             finally { EditorUtility.ClearProgressBar(); }
