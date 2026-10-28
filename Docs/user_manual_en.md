@@ -23,7 +23,8 @@ Open the material inspector and scroll down below the standard lilToon settings 
 ---
 
 ### 1. Reflection 2nd
-Adds an independent "second specular highlight" layer. Features include anisotropic reflections and seamless integration with the VRChat lighting system "VRC Light Volumes (VRCLV)".
+Adds an independent "second specular highlight" layer. Choose between a regular (Blinn-Phong) highlight and an anisotropic highlight for hair.
+The reflection follows the direction and color of lilToon's main light. In VRC Light Volumes worlds, lilToon itself derives that light from the volumes, so the reflection changes along with it.
 
 *   **Enabled**: Enables the reflection feature.
 *   **Mask**: Grayscale mask texture controlling the reflection intensity.
@@ -31,7 +32,6 @@ Adds an independent "second specular highlight" layer. Features include anisotro
 *   **Strength**: Brightness of the reflection.
 *   **Smoothness**: Sharpness of the reflection. Higher values produce smaller and sharper highlights.
 *   **Blur**: Blur radius of the reflection contour. `0` creates toon-like hard edges, while `1` produces smooth gradients.
-*   **LV Color Strength**: When integrated with **VRC Light Volumes**, controls how much the light color affects the reflection color (`0` reflects luminance only, `1` reflects full light color).
 *   **Main Color Strength**: Controls how much the main texture (base color) is multiplied into the reflection highlight.
 *   **Shadow Attenuation**: Controls how much the reflection highlight is attenuated (darkened) in shadowed areas.
 *   **Normal Map Strength**: Blends the surface normal used for reflection calculations between geometry (mesh) normal and normal-map-perturbed normal. `0` ignores the normal map for smooth reflections, while `1` fully applies normal map bumps (default: `1`).
@@ -158,11 +158,6 @@ A dropdown menu (**▼**) is available in the top-right corner of each DennokoEx
 *   **Copy (with Textures)**: Copies numerical values along with assigned texture references.
 *   **Paste**: Applies copied parameters to another material or section instantly.
 
-### Automatic VRC Light Volumes (VRCLV) Integration
-Automatically integrates with the "VRC Light Volumes" system, reflecting world lighting realistically onto the avatar.
-*   If VRCLV is installed in the project, it is detected automatically and the shader bridge is configured.
-*   To manually regenerate the integration state, select **`Window` > `DennokoEx` > `Regenerate VRCLV Bridge`** from Unity's top menu.
-
 ---
 
 ## Update Guide
@@ -170,6 +165,14 @@ Automatically integrates with the "VRC Light Volumes" system, reflecting world l
 Import (overwrite) the latest `.unitypackage` directly into your project. When updating from older versions, there is usually no need to delete existing files beforehand.
 
 After import, masks automatically migrate to the new format. To verify all materials at once, run **`Window` > `DennokoEx` > `Packed Masks` > `Update All Materials`**.
+
+> [!IMPORTANT]
+> **VRC Light Volumes (VRCLV) integration has been removed.** The regular mode of Reflection 2nd (everything except Anisotropic Mode) no longer derives its highlight from VRCLV or light probes; it now uses a Blinn-Phong highlight from lilToon's main light. Reflections no longer look drastically different from world to world, and what you see in the editor is a reliable guide to the uploaded result.
+>
+> *   Materials using the regular mode will look different after updating. Readjust **Strength**, **Smoothness** and **Blur**. Anisotropic Mode is unchanged.
+> *   The **LV Color Strength** and **Direct Light Blend** settings have been removed.
+> *   The menu items **`Window` > `DennokoEx` > `Regenerate VRCLV Bridge`** and **`Prepare for Export`** have been removed.
+> *   In VRCLV worlds, lilToon itself feeds the volumes' light into its main light, so the reflection still changes with it (unless VRC Light Volumes is disabled in lilToon's settings).
 
 ---
 

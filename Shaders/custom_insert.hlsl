@@ -34,25 +34,4 @@ float3 DNKW_MatcapLighting(float3 mc, float3 lightColor, float enableLighting, f
     #endif
 }
 
-#if DNKW_VRCLV_AVAILABLE
-// Light-Volume specular term of Reflection 2nd.
-// lilToon expands BEFORE_REFLECTION in the ForwardAdd pass too, which runs once PER additional
-// realtime light. The light-volume / light-probe term depends only on position and view, so adding
-// it again for every extra light multiplies the whole reflection by the light count (a room with
-// 3 point lights renders it at 4x) and re-samples the volume 3D textures each time. lilToon guards
-// its own environment reflection identically with `#if !defined(LIL_PASS_FORWARDADD)`; only the
-// direct-light Blinn-Phong term (_CustomRefl2ndDirectBlend) is legitimately per-light and stays in
-// the BEFORE_REFLECTION macro.
-float3 DNKW_Refl2ndLVSpecular(float3 positionWS, float smoothness, float3 N, float3 V)
-{
-    #if !defined(LIL_PASS_FORWARDADD)
-        float3 L0, L1r, L1g, L1b;
-        LightVolumeSH(positionWS, L0, L1r, L1g, L1b);
-        return LightVolumeSpecular(float3(1.0, 1.0, 1.0), smoothness, 1.0, N, V, L0, L1r, L1g, L1b);
-    #else
-        return float3(0.0, 0.0, 0.0);
-    #endif
-}
-#endif // DNKW_VRCLV_AVAILABLE
-
 #endif // DNKW_CUSTOM_INSERT_INCLUDED

@@ -16,7 +16,6 @@
         _CustomRefl2ndColor ("Reflection 2nd Color", Color) = (1, 1, 1, 1)
         _CustomRefl2ndStrength ("Reflection 2nd Strength", Range(0, 4)) = 1
         _CustomRefl2ndSmoothness ("Reflection 2nd Smoothness", Range(0, 1)) = 0.5
-        _CustomRefl2ndLVColorStrength ("Reflection 2nd LV Color Strength", Range(0, 1)) = 1
         _CustomRefl2ndMainColorStrength ("Reflection 2nd Main Color Strength", Range(0, 1)) = 0
         _CustomRefl2ndAnisotropic ("Reflection 2nd Anisotropic Mode", Float) = 0
         _CustomRefl2ndAnisoPrimaryShift ("Reflection 2nd Primary Shift", Range(-1, 1)) = 0
@@ -26,7 +25,6 @@
         _CustomRefl2ndShadowAttenuation ("Reflection 2nd Shadow Attenuation", Range(0, 1)) = 0
         _CustomRefl2ndNormalStrength ("Reflection 2nd Normal Strength", Range(0, 1)) = 1
         _CustomRefl2ndBlur ("Reflection 2nd Blur", Range(0, 1)) = 1
-        _CustomRefl2ndDirectBlend ("Reflection 2nd Direct Light Blend", Range(0, 1)) = 0
 
         //----------------------------------------------------------------------------------------------------------------------
         // Rim 2nd

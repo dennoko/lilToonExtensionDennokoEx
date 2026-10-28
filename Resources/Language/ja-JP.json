@@ -1,5 +1,5 @@
 {
-  "foldout_refl2nd": "反射 2nd (VRCLV reflection)",
+  "foldout_refl2nd": "反射 2nd",
   "foldout_rim2nd": "リム 2nd",
   "foldout_normal3rd": "ノーマルマップ 3rd",
   "foldout_main4th": "メインカラー4th（UV mode変更でMatcap化可能）",
@@ -9,8 +9,6 @@
   "label_strength": "強度",
   "label_smoothness": "滑らかさ",
   "label_blur": "ブラー",
-  "label_lv_color_strength": "LVカラー強度",
-  "label_refl2nd_direct_blend": "直接光ブレンド",
   "label_main_color_strength": "メインカラー強度",
   "label_normal_strength": "ノーマルマップ強度",
   "label_shadow_attenuation": "影減衰",
