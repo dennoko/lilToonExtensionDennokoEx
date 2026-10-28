@@ -200,8 +200,8 @@ namespace Dennokoworks
             EditorGUILayout.LabelField("DennokoEx", EditorStyles.centeredGreyMiniLabel);
 
             // Manual repair: regenerate the packed mask files of these materials. Deferred out of OnGUI
-            // because it imports assets.
-            if (GUILayout.Button(Loc("btn_rebuild_packed_mask")))
+            // because it imports assets. Also the way to pick up source image edits, which are not watched.
+            if (GUILayout.Button(new GUIContent(Loc("btn_rebuild_packed_mask"), Loc("tip_rebuild_packed_mask"))))
             {
                 var mats = new List<Material>();
                 foreach (var t in m_MaterialEditor.targets)
@@ -216,9 +216,11 @@ namespace Dennokoworks
             DrawDecal();
 
             // Queues a packed-mask update when the slots differ from the last check: covers opening the
-            // material, editing/pasting/undoing slots, and switching a material to DennokoEx.
-            foreach (var t in m_MaterialEditor.targets)
-                if (t is Material mm) DennokoExPackedMaskWatcher.RequestIfSlotsChanged(mm);
+            // material, editing/pasting/undoing slots, and switching a material to DennokoEx. Repaint only:
+            // every change is followed by one, and the other OnGUI passes would just repeat the check.
+            if (Event.current.type == EventType.Repaint)
+                foreach (var t in m_MaterialEditor.targets)
+                    if (t is Material mm) DennokoExPackedMaskWatcher.RequestIfSlotsChanged(mm);
         }
 
         // ========================================================================

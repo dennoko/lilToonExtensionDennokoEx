@@ -281,7 +281,7 @@ SDK側には出荷対象の入力と生成物を検査する薄い処理を置�
 | --- | --- |
 | `DennokoExMaskPacker` | 4スロットをGPUでRGBAにパックしPNGバイト列を返すだけ。永続化を知らない |
 | `DennokoExPackedMaskStore` | `EnsureAll(materials, persist, rebake)`。指紋計算、PNG書き出し・インポート、生成PNGのImport設定（差分時のみ再インポート）、参照割り当て。保守メニュー |
-| `DennokoExPackedMaskWatcher` | いつ `EnsureAll` を呼ぶか（`OnPostprocessAllAssets` のみ） |
+| `DennokoExPackedMaskWatcher` | いつ `EnsureAll` を自動で呼ぶか（Inspectorでのスロット変化と、プロジェクトごとに1回のシーン確認のみ。§11.4） |
 
 > ⚠️ 生成PNGのImport設定を `AssetPostprocessor.OnPreprocessTexture` で行ってはいけない。テクスチャ用ポストプロセッサーの登録（と `GetVersion`）は全テクスチャのインポート依存に含まれるため、導入・更新のたびにプロジェクト内の全テクスチャが再インポートされ、大規模プロジェクトで数十分かかった。
 | `VRCSDK/DennokoExPackedMaskBuildHook` | アップロード前の最終整合（`com.vrchat.avatars` 導入時のみコンパイル） |
@@ -298,25 +298,33 @@ SDK側には出荷対象の入力と生成物を検査する薄い処理を置�
 
 ### 11.4 トリガー
 
+自動トリガーは最小限に絞っている（2026-10-28）。当初はアセットのインポート・削除、`ObjectChangeEvents`、Domain Reload／Sceneを開いた時にも反応していたが、次の問題があったため廃止した。
+
+- 他パッケージの導入・更新や画像の追加のたびに、プロジェクトの全Materialに対する `GetDependencies` 走査が走った。
+- BlendShape操作やスライダーのドラッグ中にも毎フレーム `EnsureAll` が走った。
+
+エディタから見えない変更は、手動操作（§11.5）とアップロード時のビルドフックで補う。
+
 | 契機 | 処理 |
 | --- | --- |
-| Domain Reload、Scene／Prefab Stageを開いた時 | 読み込み済みSceneとPrefab Stageの全Renderer（非アクティブ含む）のMaterialをキュー。旧一時プレビューからの自動移行も兼ねる |
-| GameObject生成（Prefab配置・貼り付け）、Rendererのプロパティ変更（Material差し替え） | 該当RendererのMaterialをキュー |
-| Inspector描画 | スロット参照（インスタンスID）が前回確認時から変わった時だけキュー。開いた時、編集・ペースト・Undo、DennokoExへの切替を網羅 |
-| `ObjectChangeEvents` のMaterialプロパティ変更 | キュー |
-| Material格納ファイル（`.mat`／`.asset`／モデル）のインポート | DennokoExシェーダーフォルダーへの依存を `GetDependencies` で確認し、該当ファイルだけ `LoadAllAssetsAtPath` でファイル内の全Materialをキュー（VCS更新・外部ツール・自分の保存・モデル再インポート）。全体インポート時に全モデル・`.asset` を読み込まないため |
-| 元画像のインポート | DennokoExシェーダーに依存し、かつ変更画像に依存する保存済みファイルを `GetDependencies` で探し、ファイル内の全Materialをキュー。加えて、過去に確認したメモリ上Material（Scene埋め込み・スクリプト生成クローン）のうち、そのパスをスロットに持つ物をキュー |
-| 画像・生成物の削除 | 依存が辿れないため、DennokoExシェーダーを使う保存済みMaterialと、確認済みメモリ上Materialをすべて再確認（no-opが大半） |
+| Inspector描画（Repaintイベントのみ） | スロット参照（インスタンスID）が前回確認時から変わった時だけキュー。開いた時、編集・ペースト・Undo、DennokoExへの切替を網羅。既存ファイルのImport設定は確認しない（新規生成分のみ） |
+| プロジェクトごとに1回（`EditorUserSettings` の `DennokoEx.PackedMaskMigration`） | 読み込み済みSceneとPrefab Stageの全RendererのMaterialをキュー。旧一時プレビューからの移行用 |
 | VRChatアバターのアップロード | callbackOrder 0（NDMF/MAの後、lilToon 100の前）で Renderer とアニメーションクリップ参照のMaterialを `EnsureAll(persist:false)`。失敗時はアップロードを中止 |
 
-キューは `EditorApplication.update` で、コンパイル・インポート・Play移行中を避けて1回ずつ処理する。アセット通知の中では何も書かない。
+キューは `EditorApplication.update` で、コンパイル・インポート・Play中を避けて1回ずつ処理する。Play中のキューはPlay終了後に処理し、その時点で破棄済みのクローンは無視される。
+
+自動では反映されないケースは、手動操作で反映する。アップロード時はビルドフックで必ず整合する。
+
+- 元画像の外部編集や再インポート、Import設定の変更（指紋の依存ハッシュが変わる）。
+- Inspector外でのスロット変更（スクリプト、プリセット、非表示中のUndo）。
+- VCS・パッケージで入ってきたMaterialの参照ずれ。
 
 §2.2 で指摘したアニメーション専用Materialの取りこぼしは、ビルドフックがクリップの参照も収集することで解消した。NDMFクローン等のメモリ上Materialもその場で割り当てるため、NDMFプラグインは削除した（NDMF依存なし）。
 
 ### 11.5 手動操作
 
-- Inspector「パック済みマスクを再生成」: 選択Materialのファイルを再ベイクして上書き。
-- `Window > DennokoEx > Packed Masks > Update All Materials`: 既存Materialの一括移行・点検。
+- Inspector「パック済みマスクを再生成」: 選択Materialのファイルを再ベイクして上書き。元画像を編集した後に使う（ツールチップで案内）。
+- `Window > DennokoEx > Packed Masks > Update All Materials`: 既存Materialの一括移行・点検。Import設定の変更もここで既存ファイルに反映される。
 - `Window > DennokoEx > Packed Masks > Delete Unused Generated Masks`: 保存済みMaterialから参照されない生成PNGを確認付きで削除。
 
 ### 11.6 未検証事項

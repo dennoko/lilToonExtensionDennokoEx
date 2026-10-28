@@ -17,7 +17,7 @@ namespace Dennokoworks
     //     yields a different file, so an existing file is never overwritten under another material —
     //     duplicated materials, Undo and shared inputs all stay consistent by construction.
     //   * EnsureAll is idempotent: when the assigned texture already is the expected file it writes
-    //     nothing. Every trigger (inspector, asset changes, build) just calls it, and repeated calls
+    //     nothing. Every trigger (inspector, manual menus, build) just calls it, and repeated calls
     //     converge after at most one write, so no loop guard or retry state is needed.
     //   * Compression, mipmaps and streaming come from the TextureImporter, identically in the editor
     //     preview and in uploads. The settings are written to the generated files' own importers
@@ -40,9 +40,14 @@ namespace Dennokoworks
         //   persist: save changed .mat assets right away, so the reference survives reloads/reimports.
         //            Builds pass false to avoid saving (and reimporting) assets mid-build.
         //   rebake:  regenerate the files even if they exist (manual repair).
+        //   checkAllImportSettings: also verify the import settings of files that already existed (loads
+        //            their importers). Newly written files are always set up. Automatic triggers pass
+        //            false; manual operations and builds keep the default, so settings changed by an
+        //            update are applied there.
         // Returns false if any material could not be brought up to date; the reason is logged and the
         // material keeps its previous packed texture.
-        public static bool EnsureAll(IEnumerable<Material> materials, bool persist, bool rebake = false)
+        public static bool EnsureAll(IEnumerable<Material> materials, bool persist, bool rebake = false,
+                                     bool checkAllImportSettings = true)
         {
             var plans = new List<KeyValuePair<Material, string>>();
             var seen = new HashSet<Material>();
@@ -96,10 +101,14 @@ namespace Dennokoworks
                 if (editing) AssetDatabase.StopAssetEditing();
             }
 
-            var paths = new HashSet<string>();
-            foreach (var plan in plans)
-                if (plan.Value != null) paths.Add(plan.Value);
-            EnsureImportSettings(paths);
+            if (checkAllImportSettings)
+            {
+                var paths = new HashSet<string>();
+                foreach (var plan in plans)
+                    if (plan.Value != null) paths.Add(plan.Value);
+                EnsureImportSettings(paths);
+            }
+            else EnsureImportSettings(written);
 
             // Pass 2: assign. Only materials whose reference actually changes are touched.
             foreach (var plan in plans)
@@ -259,7 +268,7 @@ namespace Dennokoworks
 
         // Distinct asset paths containing at least one material. FindAssets returns GUIDs per file, and a
         // file (model, .asset) may hold several materials, so callers must use LoadMaterialsAtPath.
-        public static List<string> FindMaterialContainerPaths()
+        static List<string> FindMaterialContainerPaths()
         {
             var paths = new List<string>();
             var seen = new HashSet<string>(System.StringComparer.OrdinalIgnoreCase);
@@ -279,23 +288,19 @@ namespace Dennokoworks
             return string.IsNullOrEmpty(path) ? null : Path.GetDirectoryName(path).Replace('\\', '/') + "/";
         }
 
-        // Whether a file whose direct dependencies are `dependencies` may hold a DennokoEx material.
-        // Reads the dependency database only, so it is far cheaper than LoadAllAssetsAtPath on models
-        // and large .asset files. Without a located shader folder nothing can be ruled out.
-        public static bool UsesDennokoExShader(string[] dependencies)
+        // Whether the file at `path` may hold a DennokoEx material, given ShaderFolder(). Reads the
+        // dependency database only, so it is far cheaper than LoadAllAssetsAtPath on models and large
+        // .asset files. Without a located shader folder nothing can be ruled out.
+        static bool UsesDennokoExShader(string path, string shaderFolder)
         {
-            string folder = ShaderFolder();
-            if (folder == null) return true;
-            foreach (var dep in dependencies)
-                if (dep.StartsWith(folder, System.StringComparison.OrdinalIgnoreCase)) return true;
+            if (shaderFolder == null) return true;
+            foreach (var dep in AssetDatabase.GetDependencies(path, false))
+                if (dep.StartsWith(shaderFolder, System.StringComparison.OrdinalIgnoreCase)) return true;
             return false;
         }
 
-        public static bool UsesDennokoExShader(string path)
-            => UsesDennokoExShader(AssetDatabase.GetDependencies(path, false));
-
         // Every DennokoEx material stored in the file, main asset or sub-asset.
-        public static List<Material> LoadMaterialsAtPath(string path)
+        static List<Material> LoadMaterialsAtPath(string path)
         {
             var result = new List<Material>();
             if (string.IsNullOrEmpty(path)) return result;
@@ -309,12 +314,13 @@ namespace Dennokoworks
         {
             var materials = new List<Material>();
             var paths = FindMaterialContainerPaths();
+            string shaderFolder = ShaderFolder();
             try
             {
                 for (int i = 0; i < paths.Count; i++)
                 {
                     if (EditorUtility.DisplayCancelableProgressBar("DennokoEx", paths[i], (float)i / paths.Count)) return;
-                    if (UsesDennokoExShader(paths[i])) materials.AddRange(LoadMaterialsAtPath(paths[i]));
+                    if (UsesDennokoExShader(paths[i], shaderFolder)) materials.AddRange(LoadMaterialsAtPath(paths[i]));
                 }
             }
             finally { EditorUtility.ClearProgressBar(); }
@@ -350,7 +356,7 @@ namespace Dennokoworks
             }
             if (!EditorUtility.DisplayDialog("DennokoEx",
                     $"Delete {unused.Count} packed mask file(s) not referenced by any saved material?\n" +
-                    "Unsaved materials that still use them will regenerate them when edited or built.",
+                    "Unsaved materials that still use them regenerate them when inspected, rebuilt or uploaded.",
                     "Delete", "Cancel"))
                 return;
 

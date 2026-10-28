@@ -1,5 +1,4 @@
 #if UNITY_EDITOR
-using System.Diagnostics;
 using System.IO;
 using System.Text;
 using UnityEditor;
@@ -10,6 +9,8 @@ namespace Dennokoworks
     [InitializeOnLoad]
     public static class DennokoExVRCLVDetector
     {
+        const string VRCLVPackage = "red.sim.lightvolumes";
+        const string LilToonPackage = "jp.lilxyzw.liltoon";
         const string VRCLVFolder  = "Packages/red.sim.lightvolumes";
         const string VRCLVInclude = "Packages/red.sim.lightvolumes/Shaders/LightVolumes.cginc";
 
@@ -27,15 +28,32 @@ namespace Dennokoworks
         // Bridge is a normal Unity asset; reimporting it triggers transitive shader recompile.
         const string BridgeAsset  = "Assets/dennokoworks/DennokoEx/Shaders/DennokoEx_VRCLV_Bridge.cginc";
 
+        const string CheckedKey = "DennokoEx.VRCLVChecked";
+
         static DennokoExVRCLVDetector()
         {
-            // On package add/remove: write inject file and schedule bridge reimport.
-            // Unity's post-install compile is likely still running at this point, so
-            // we defer the ImportAsset call until the editor is fully idle to avoid
-            // triggering a second heavy shader compile pass on top of Unity's own.
-            Events.registeredPackages += _ => EditorApplication.delayCall += RegenerateAfterPackageChange;
-            SetupGitSkipWorktree();
+            // Only VRCLV / lilToon package changes can change the inject content. Reimporting the bridge
+            // recompiles every DennokoEx shader, so unrelated package installs must not reach it.
+            Events.registeredPackages += OnPackagesRegistered;
+            // Once per editor session; later changes arrive through registeredPackages or the menu.
+            if (SessionState.GetBool(CheckedKey, false)) return;
+            SessionState.SetBool(CheckedKey, true);
             Regenerate();
+        }
+
+        static void OnPackagesRegistered(PackageRegistrationEventArgs args)
+        {
+            if (!Involves(args.added) && !Involves(args.removed) && !Involves(args.changedTo)) return;
+            // Unity's post-install compile is likely still running here; Regenerate defers the reimport
+            // until the editor is idle so it does not stack a second shader compile on top of it.
+            EditorApplication.delayCall += () => Regenerate();
+        }
+
+        static bool Involves(System.Collections.Generic.IEnumerable<UnityEditor.PackageManager.PackageInfo> packages)
+        {
+            foreach (var p in packages)
+                if (p.name == VRCLVPackage || p.name == LilToonPackage) return true;
+            return false;
         }
 
         [MenuItem("Window/DennokoEx/Regenerate VRCLV Bridge")]
@@ -60,32 +78,6 @@ namespace Dennokoworks
             File.WriteAllText(fullPath, safe, Encoding.UTF8);
             ScheduleBridgeReimportWhenIdle();
             EditorUtility.DisplayDialog("DennokoEx", "DennokoEx_VRCLV_Inject.cginc~ has been reset to safe default.\nYou can now export the package.", "OK");
-        }
-
-        // Prevent accidental commits of the VRCLV=1 inject file in git-based VPM packages.
-        static void SetupGitSkipWorktree()
-        {
-            try
-            {
-                string projectRoot = Path.GetFullPath(Path.Combine(UnityEngine.Application.dataPath, ".."));
-                var psi = new ProcessStartInfo("git", $"update-index --skip-worktree {InjectAsset}")
-                {
-                    WorkingDirectory = projectRoot,
-                    UseShellExecute = false,
-                    CreateNoWindow  = true,
-                };
-                Process.Start(psi);
-            }
-            catch { } // Silently ignore if git is unavailable or this is not a git repo
-        }
-
-        // Called via delayCall when packages are registered/unregistered.
-        // Unity's own post-install shader compile may still be in progress here,
-        // so we schedule the bridge reimport to run only once Unity is fully idle.
-        static void RegenerateAfterPackageChange()
-        {
-            WriteInjectIfChanged();
-            ScheduleBridgeReimportWhenIdle();
         }
 
         // Polls until Unity is neither compiling nor updating, then reimports the bridge.

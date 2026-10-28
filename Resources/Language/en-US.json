@@ -56,6 +56,7 @@
   "warn_vrc_upload": "After VRC upload, this material may appear transparent. If so, click the button below to fix the shader.",
   "btn_refresh_shader": "Fix Shader (Refresh Shader)",
   "btn_rebuild_packed_mask": "Rebuild Packed Mask",
+  "tip_rebuild_packed_mask": "Regenerates the packed mask from the current mask textures. Use it after editing or reimporting a mask image, or when the mask looks outdated. It is also checked automatically on upload.",
   "menu_copy": "Copy",
   "menu_copy_with_tex": "Copy (with Textures)",
   "menu_paste": "Paste"
